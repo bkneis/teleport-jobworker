@@ -24,19 +24,18 @@ type JobOpts struct {
 
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
 type JobStatus struct {
-	ID          string
-	Owner       string
-	PID         int
-	Running     bool
-	ExitCode    uint8
-	ReturnError error
+	ID       string
+	Owner    string
+	PID      int
+	Running  bool
+	ExitCode int
 }
 
 // Worker defines the libraries API on how to start / stop / query status and get output of a job
 type Worker interface {
 	Start(opts JobOpts, owner, name string, args ...string) (id string, err error)
 	Stop(id string) error
-	Status(id string) (JobStatus, error)
+	Status(id string) JobStatus
 	Output(id string) (io.Reader, error)
 }
 

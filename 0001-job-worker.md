@@ -107,7 +107,6 @@ worker status 667752ba-4cbb-44eb-adad-5b324c8204bc
 >	PID         387
 >	Running     true
 >	ExitCode    
->	ReturnError 
 
 worker stream 667752ba-4cbb-44eb-adad-5b324c8204bc
 > hello
@@ -123,7 +122,6 @@ worker status 667752ba-4cbb-44eb-adad-5b324c8204bc
 >	PID         387
 >	Running     false
 >	ExitCode    0
->	ReturnError 
 ```
 
 ### Golang Usage
