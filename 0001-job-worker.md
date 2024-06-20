@@ -128,7 +128,7 @@ worker status 667752ba-4cbb-44eb-adad-5b324c8204bc
 
 ### Golang Usage
 
-Please see `doc.go` for an annotated list of types and interfaces the go library will provide. Below is an example of how the library could be used
+Please see `doc.go` for an annotated list of types and interfaces the go library will provide. Below is a simple example of how the library could be used to start a job and stream the output
 
 ```golang
 package main
@@ -180,12 +180,6 @@ func main() {
     for scanner.Scan() {
         line := scanner.Text()
         log.Printf("%s\n", line)
-    }
-
-    err = worker.Stop(id)
-    if err != nil {
-        log.Error(err)
-        return
     }
 }
 ```
