@@ -238,3 +238,5 @@ At the very least, the jobworker should be able to:
  - jobworker does not calculate the total requested resources (CPU, memory, IO) for all jobs, does not exceed the system. cgroup controllers provide interface files to give system maximums. In production these would need to be checked to ensure jobs are not requested over the max.
 
  - No rate limiting has been used. A client could accidentally DOS the system by requiring too many jobs with resource controls. In production a gRPC interceptor could be used to implement a rate limiting algorithm such as leaky bucket.
+
+ - Logs are stored on the file system. For this challenge I think the logs would have needed to either be in memory or on a file system. In production these logs could be stored in a database with good performance for large log files such as elastic search.
