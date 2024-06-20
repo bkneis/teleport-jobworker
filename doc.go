@@ -110,7 +110,7 @@ func (worker *JobWorker) Start(owner, cmd string, opts JobOpts) (id string, err 
 	worker.Unlock()
 
 	// Set up the environment for the job
-	log, err := os.Create(fmt.Sprintf("/tmp/&s.log", id)) // todo need to use file permissions
+	log, err := os.Create(fmt.Sprintf("/tmp/%s.log", id)) // todo need to use file permissions
 	job.cmd.Env = []string{}
 	job.cmd.Stdout = log
 	job.cmd.Stderr = log
@@ -118,8 +118,24 @@ func (worker *JobWorker) Start(owner, cmd string, opts JobOpts) (id string, err 
 	return id, job.cmd.Start()
 }
 
-func (worker *JobWorker) Stop(id string) error { return nil }
+func (worker *JobWorker) Stop(id string) error {
+	worker.Lock()
+	defer worker.Unlock()
+	return worker.jobs[id].cmd.Process.Kill()
+}
 
-func (worker *JobWorker) Status(id string) (JobStatus, error) { return JobStatus{}, nil }
+func (worker *JobWorker) Status(id string) (JobStatus, error) {
+	worker.RLock()
+	owner := worker.jobs[id].owner
+	job := worker.jobs[id].cmd.Process.Pid
+	defer worker.RUnlock()
+	running := worker.jobs[id].cmd.ProcessState.Exited()
+	return JobStatus{
+		ID:      id,
+		Owner:   worker.jobs[id].owner,
+		PID:     worker.jobs[id].cmd.Process.Pid,
+		Running: worker.jobs[id].cmd.ProcessState.Exited(),
+	}, nil
+}
 
 func (worker *JobWorker) Output(id string) (io.Reader, error) { return nil, nil }
