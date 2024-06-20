@@ -34,7 +34,7 @@ type JobStatus struct {
 
 // Worker defines the libraries API on how to start / stop / query status and get output of a job
 type Worker interface {
-	Start(owner, cmd string, opts JobOpts) (id string, err error)
+	Start(opts JobOpts, owner, name string, args ...string) (id string, err error)
 	Stop(id string) error
 	Status(id string) (JobStatus, error)
 	Output(id string) (io.Reader, error)

@@ -10,8 +10,9 @@ option java_outer_classname = "JobWorkerProto";
 
 // Start request containing linux command as a string and resource control options
 message StartRequest {
-    string cmd = 1;
-    JobOpts opts = 2;
+    string name = 1;
+    repeated string args = 2;
+    JobOpts opts = 3;
 }
 
 // All other requests just have job UUID. I did not make these generic as per protobuf best practices
