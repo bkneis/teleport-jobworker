@@ -153,7 +153,7 @@ func main() {
         return
     }
 
-    id, err := worker.Start(user.UserName, cmd, JobOpts{100, "100M", "50ms"})
+    id, err := worker.Start(user.UserName, JobOpts{100, "100M", "50ms"}, cmd)
     if err != nil {
         log.Error(err)
         return
