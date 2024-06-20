@@ -26,7 +26,7 @@ type JobOpts struct {
 type JobStatus struct {
 	ID          string
 	Owner       string
-	PID         int8
+	PID         int
 	Running     bool
 	ExitCode    uint8
 	ReturnError error
