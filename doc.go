@@ -124,18 +124,17 @@ func (worker *JobWorker) Stop(id string) error {
 	return worker.jobs[id].cmd.Process.Kill()
 }
 
-func (worker *JobWorker) Status(id string) (JobStatus, error) {
+func (worker *JobWorker) Status(id string) JobStatus {
 	worker.RLock()
-	owner := worker.jobs[id].owner
-	job := worker.jobs[id].cmd.Process.Pid
 	defer worker.RUnlock()
-	running := worker.jobs[id].cmd.ProcessState.Exited()
 	return JobStatus{
-		ID:      id,
-		Owner:   worker.jobs[id].owner,
-		PID:     worker.jobs[id].cmd.Process.Pid,
-		Running: worker.jobs[id].cmd.ProcessState.Exited(),
-	}, nil
+		ID:          id,
+		Owner:       worker.jobs[id].owner,
+		PID:         worker.jobs[id].cmd.Process.Pid,
+		Running:     worker.jobs[id].cmd.ProcessState.Exited(),
+		ExitCode:    worker.jobs[id].cmd.ProcessState.ExitCode(),
+		ReturnError: nil, // todo hmmm, maybe add to Job??
+	}
 }
 
 func (worker *JobWorker) Output(id string) (io.Reader, error) { return nil, nil }
