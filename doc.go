@@ -1,10 +1,13 @@
-package doc
+package jobworker
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"time"
+
+	"github.com/mainflux/pkg/uuid"
 )
 
 type CgroupByte int64
@@ -87,3 +90,36 @@ func newTailReader(pollInterval time.Duration, fileName string) (tailReader, err
 	}
 	return tailReader{f, pollInterval}, nil
 }
+
+// New returns an initialized JobWorker with the cgroup resource controller
+func New() *JobWorker {
+	return &JobWorker{
+		jobs: JobsList{},
+		con:  &Cgroup{},
+	}
+}
+
+func (worker *JobWorker) Start(owner, cmd string, opts JobOpts) (id string, err error) {
+	// Create the job
+	id = uuid.New().String()
+	job := Job{owner, exec.Command(cmd)}
+
+	// Add it to our in memory database of jobs
+	worker.Lock()
+	worker.jobs[id] = &job
+	worker.Unlock()
+
+	// Set up the environment for the job
+	log, err := os.Create(fmt.Sprintf("/tmp/&s.log", id)) // todo need to use file permissions
+	job.cmd.Env = []string{}
+	job.cmd.Stdout = log
+	job.cmd.Stderr = log
+
+	return id, job.cmd.Start()
+}
+
+func (worker *JobWorker) Stop(id string) error { return nil }
+
+func (worker *JobWorker) Status(id string) (JobStatus, error) { return JobStatus{}, nil }
+
+func (worker *JobWorker) Output(id string) (io.Reader, error) { return nil, nil }
