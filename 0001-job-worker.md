@@ -7,7 +7,7 @@ state: draft
 
 ## Required Approvers
 
-Engineering: @Stephen Levine | @Trent Clarke | @david | @jim
+Engineering: @sclevine || @tcsc || @dboslee  || @jimbishopp
 
 ## What
 
@@ -60,6 +60,12 @@ In this PR there is a `worker.proto` file specifying the RPC service and it's me
 
 When starting a job the cmd.Exec will map the STDOUT and STDERR to a file. When the client requests the output stream, the gRPC endpoint can then tail the contents of the file and pipe it through the gRPC response stream to the client. The advantage to this approach is simplicity, the go standard library then handles concurrent writing of STDOUT and STDERR to the file. Concurrent reading then becomes as easy as tailing the file and piping the response through the gRPC stream. Since level 4 did not need resource isolation for mount and PID namespaces, this has not been implemented, but this would need to be done in production to isolate the log of each Job. The disadvantages of this method is that it does not handle log rotations, in the event the process is very long lived or produces many logs. In this case the stream may end and the user could be required to cancel and re run the command.
 
+The library will tail the contents of the file by wrapping an io.ReadCloser around the job's log os.File. Typically a reader will `Read()` until there is no more data. At this point it returns an `io.EOF`, which causes `bufio.Scanner` to stop reading. Instead we return the caller a wrapped io.ReadCloser that upon reaching the end of the data, waits a configurable amount of time and tries to read again (polls for changes). When a call to `Output()` to JobWorker occurs, it opens the job's log file and wraps this reader and returns it to the caller to read from. See `tailReader` in doc.go for an example.
+
+Logs have been chosen to store on disk over memory for several reasons:
+ - Simplicity: It's easier to simply specify a file descriptor to exec.Cmd.StdOut and StdErr to concurrently write the output to a file. It's also easier to concurrently read from a file as this is natively supported in linux. If the contents were in a buffer in memory a concurrent reading would require more code and potentially require a copy of the buffer for every reader
+ - Fault tolerance: If the job worker process dies, the in memory logs would be lost. By using a file it is possible that the job worker could resume streaming a job's output
+
 ### Process execution life cycle
 
 Together with this design doc there are two UML sequence diagrams showing a happy and un happy scenario.
@@ -70,7 +76,7 @@ In the unhappy scenario a gRPC client sends a start request to the server. The s
 
 ![happy.plantuml](happy.jpg "Happy Scenario")
 
-The happy scenario is the same for starting a job. Here we assume the command has not yet returned and is executing, so the status response returns Running true. Therefore the client can now use the ID again to stream the logs of the job. After streaming for a period of time the client can cancel the stream. If the client then decides to stop the job it can send the ID to the server and the server can forcefully close the process using os.Process.Kill. Once killed the cgroup is deleted and a response sent to the client.
+The happy scenario is the same for starting a job. Here we assume the command has not yet returned and is executing, so the status response returns Running true. Therefore the client can now use the ID again to stream the logs of the job. After streaming for a period of time the client can cancel the stream. If the client then decides to stop the job it can send the ID to the server which sends a SIGTERM signal to the process, i.e. `cmd.Process.Signal(syscall.SIGTERM)`. Once stopped the cgroup is deleted and a response sent to the client.
 
 ### Process model
 
@@ -89,15 +95,32 @@ When the jobworker starts a process, instead of executing the command, it first 
 
 ### CLI UX
 
-A CLI client will be implemented using a gRPC client communicating over mTLS to the gRPC server, wrapping the go library. Below is an example of how to use the CLI
+A CLI client will be implemented using a gRPC client communicating over mTLS to the gRPC server, wrapping the go library. Since the gRPC server cannot rely on any set up on the host, a DNS name or service discovery is not possible. Therefore the gRPC server will listen on a known, yet configurable, port on 0.0.0.0 so the gRPC client can connect over a network.
+
+Below is an example of how to use the CLI
 
 ```bash
 worker help
-> worker {action} {args}
-> action is either start, stop, status, logs and help
-> the only action with args is start, which takes the linux command to run.
+> worker is a CLI tool for running linux commands as "jobs" and managing them
+>
+> Usage: worker [flags] <action> [command]
+>
+> Support actions are:
+>       start   Run linux command and return job ID
+>       status  Get status of the job
+>       stream  Stream the output (STDOUT and STDERR) of the job
+>       stop    Stop the job from running
+> 
+> the only action with [flags] or [command] is start, which takes the linux command to run and optionally these flags
+>
+>       --cpu weight
+>                       Specifies cgroup controllers "cpu.weight" file, the value should be between [1, 10000]
+>       --memory limit
+>                       Specifies cgroup controllers "mem.limit" file, in megabytes (i.e. "M")
+>       --io latency
+>                       Specifies cgroup controllers "io.latency" file, in milliseconds (i.e. "ms")
 
-worker start bash -c "while true; do echo hello; sleep 2; done"
+worker start --cpu 1000 ---memory 256 --io 50 bash -c "while true; do echo hello; sleep 2; done"
 > 667752ba-4cbb-44eb-adad-5b324c8204bc
 
 worker status 667752ba-4cbb-44eb-adad-5b324c8204bc

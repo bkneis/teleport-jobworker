@@ -31,8 +31,8 @@ message OutputRequest {
 // Options for cgroup v2 controllers, see doc.go for example interfaces
 message JobOpts {
     int32 cpu_weight = 1;
-	string mem_limit = 2;
-	string io_latency = 3;
+	int32 mem_limit = 2;
+	int32 io_latency = 3;
 }
 
 // Overall status of job, as returned by StatusResponse. I did not nest this message in StatusResponse since I think it could
