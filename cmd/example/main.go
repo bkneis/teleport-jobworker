@@ -11,6 +11,7 @@ import (
 	"github.com/teleport-jobworker/pkg/jobworker"
 )
 
+// cleanup is called after capturing Ctrl+C and used to delete the started job
 func cleanup(id string, worker *jobworker.JobWorker) {
 	if id != "" {
 		err := worker.Stop(id)
@@ -18,6 +19,7 @@ func cleanup(id string, worker *jobworker.JobWorker) {
 			log.Fatal(err)
 			return
 		}
+		log.Printf("Stopped job %s", id)
 	}
 }
 
@@ -43,32 +45,42 @@ func main() {
 		return
 	}
 
+	// Define job's command and options
 	cmd := "while true; do echo hello; sleep 2; done"
-	opts := jobworker.NewOpts(100, "100M", "50ms")
+	opts := jobworker.NewOpts(100, 100, 50)
 
+	// Run the job
 	id, err = worker.Start(opts, user.Name, cmd)
 	if err != nil {
+		log.Print("failed to start command")
 		log.Print(err)
 		return
 	}
 
-	status := worker.Status(id)
+	// log.Printf("Job created with ID %s", id)
+
+	status, err := worker.Status(id)
 	if err != nil {
+		log.Print("failed to get status")
 		log.Print(err)
 		return
 	}
 
+	log.Print(status)
 	if !status.Running {
 		log.Print("job not running")
 		return
 	}
 
+	// Get io.ReadCloser tailing job logs
 	reader, err := worker.Output(id)
 	if err != nil {
 		log.Print("could not get reader for job's output")
 		return
 	}
 
+	// Log output to STDOUT
+	log.Print("Job's logs")
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()

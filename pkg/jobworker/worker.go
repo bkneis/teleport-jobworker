@@ -3,9 +3,11 @@ package jobworker
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"sync"
+	"syscall"
 
 	"github.com/google/uuid"
 )
@@ -22,9 +24,9 @@ type Job struct {
 // JobOpts wraps the options that can be passed to cgroups for the job
 // details at https://facebookmicrosites.github.io/cgroup2/docs/overview
 type JobOpts struct {
-	CpuWeight int    // `cpu.weight`
-	MemLimit  string // `mem.high`
-	IOLatency string // `io.latency`
+	CpuWeight int // `cpu.weight`
+	MemLimit  int // `mem.high`
+	IOLatency int // `io.latency`
 }
 
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
@@ -36,12 +38,24 @@ type JobStatus struct {
 	ExitCode int
 }
 
-// Worker defines the libraries API on how to start / stop / query status and get output of a job
-type Worker interface {
-	Start(opts JobOpts, owner, cmd string, args ...string) (id string, err error)
-	Stop(id string) error
-	Status(id string) (JobStatus, error)
-	Output(id string) (io.Reader, error)
+func (status JobStatus) String() string {
+	return fmt.Sprintf(`
+		Job Status
+		ID	 %s
+		Owner	 %s
+		PID	 %d
+		Running	 %t
+		ExitCode %d
+	`, status.ID, status.Owner, status.PID, status.Running, status.ExitCode)
+}
+
+// JobNotFound is an error returned when the job ID cannot be found
+type JobNotFound struct {
+	id string
+}
+
+func (err *JobNotFound) Error() string {
+	return fmt.Sprintf("could not find job with id %s", err.id)
 }
 
 // ResourceController defines the interface for implementing resource control of new processes
@@ -64,12 +78,12 @@ type JobWorker struct {
 func New() *JobWorker {
 	return &JobWorker{
 		jobs: JobsList{},
-		con:  &Cgroup{"/sys/fs/cgroup/"},
+		con:  &Cgroup{"/sys/fs/cgroup"},
 	}
 }
 
 // NewOpts returns a configured JobOpts based on arguments
-func NewOpts(weight int, memLimit, ioLatency string) JobOpts {
+func NewOpts(weight, memLimit, ioLatency int) JobOpts {
 	return JobOpts{
 		CpuWeight: weight,
 		MemLimit:  memLimit,
@@ -82,23 +96,36 @@ func NewOpts(weight int, memLimit, ioLatency string) JobOpts {
 // before running the actual job's command
 func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) (id string, err error) {
 	id = uuid.New().String()
+
 	// Prefix the cmd and args with a command to add the PID to the cgroup
-	// todo test
-	jobCmd := fmt.Sprintf("echo $$ > /sys/fs/cgroup/%s/cgroup.procs; %s", id, cmd)
+	jobCmd := "bash"
+	cgroup := fmt.Sprintf("/sys/fs/cgroup/%s/cgroup.procs", id)
+	testCmd := fmt.Sprintf("echo $$ >> %s; %s", cgroup, cmd)
+	for _, arg := range args {
+		testCmd += fmt.Sprintf(" %s", arg)
+	}
+	args = []string{"-c", testCmd}
+	// log.Printf("executing cmd %s %v", jobCmd, args)
+
 	// Create the job
 	job := Job{owner, exec.Command(jobCmd, args...)}
 
 	// Create the cgroup and configure the controllers
 	if err = worker.con.CreateGroup(id); err != nil {
+		log.Print("failed to create group")
 		return "", err
 	}
+
+	// todo do we need to wait for signal or sleep?
+	// Update cgroup controllers to add resource control to process
 	if err = worker.con.AddResourceControl(id, opts); err != nil {
+		log.Print("failed to add resource control")
 		return "", err
 	}
 
 	// Don't inherit environment from parent
 	job.cmd.Env = []string{}
-	// todo need to check chroot of working directory
+	// todo possible use chroot for working directory
 
 	// Pipe STDOUT and STDERR to a log file
 	log, err := os.Create(fmt.Sprintf("/tmp/%s.log", id)) // todo need to use file permissions
@@ -107,45 +134,53 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 
 	// Add it to our in memory database of jobs
 	worker.Lock()
-	defer worker.Unlock()
 	worker.jobs[id] = &job
+	worker.Unlock()
+
 	// Start the job
 	return id, job.cmd.Start()
 }
 
-// Stop kills the job's process and removes it's cgroup
+// Stop request job's termination and remove it's cgroup
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
-	if err := worker.jobs[id].cmd.Process.Kill(); err != nil {
+	defer worker.Unlock()
+	if err := worker.jobs[id].cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return err
 	}
-	worker.Unlock() // not defer'ing as not to wait for the cgroup file to be deleted
 	return worker.con.DeleteGroup(id)
 }
 
 // Status generates a JobStatus with information from the job and it's underlying os.Process & os.ProcessState
-func (worker *JobWorker) Status(id string) JobStatus {
+func (worker *JobWorker) Status(id string) (JobStatus, error) {
 	worker.RLock()
 	defer worker.RUnlock()
+	// Check the job exists
+	job, ok := worker.jobs[id]
+	if !ok {
+		return JobStatus{}, &JobNotFound{id}
+	}
+	// Get PID and possibly exit code from Process and ProcessState, assume running if ProcessState is nil
+	pid := 0
+	exitCode := 0
+	running := true
+	if job.cmd.Process != nil {
+		pid = job.cmd.Process.Pid
+	}
+	if job.cmd.ProcessState != nil {
+		running = job.cmd.ProcessState.Exited()
+		exitCode = job.cmd.ProcessState.ExitCode()
+	}
 	return JobStatus{
 		ID:       id,
-		Owner:    worker.jobs[id].owner,
-		PID:      worker.jobs[id].cmd.Process.Pid,
-		Running:  worker.jobs[id].cmd.ProcessState.Exited(),
-		ExitCode: worker.jobs[id].cmd.ProcessState.ExitCode(),
-	}
+		Owner:    job.owner,
+		PID:      pid,
+		Running:  running,
+		ExitCode: exitCode,
+	}, nil
 }
 
-// Output executes tail -f and pipes the STDOUT to an io.Reader that it returned to the caller
-func (worker *JobWorker) Output(id string) (reader io.Reader, err error) {
-	// Tail the job's log and follow
-	cmd := exec.Command("tail", "-f", fmt.Sprintf("/tmp/%s.log", id))
-	// Get an io.Reader to the STDOUT
-	if reader, err = cmd.StdoutPipe(); err != nil {
-		return nil, err
-	}
-	if err = cmd.Start(); err != nil {
-		return nil, err
-	}
-	return reader, nil
+// Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
+func (worker *JobWorker) Output(id string) (reader io.ReadCloser, err error) {
+	return newTailReader(fmt.Sprintf("/tmp/%s.log", id))
 }
