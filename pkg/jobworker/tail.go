@@ -18,7 +18,7 @@ func (t tailReader) Read(b []byte) (int, error) {
 		} else if err != io.EOF {
 			return n, err
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
