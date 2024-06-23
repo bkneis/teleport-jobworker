@@ -7,6 +7,8 @@ Executing the linux command is done using `exec.Cmd` where the command is wrappe
 
 This repo also contains a simple example of how to use the library. This is not the gRPC client and CLI, just an example usage of the golang library.
 
+The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups has correctly performed a request. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created. Such as stat'ing a file like cgroup.controllers.
+
 ## How to
 
 Build the example

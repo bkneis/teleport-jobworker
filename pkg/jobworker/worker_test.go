@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestJobWorker_Can_Start_A_Job_Tail_Logs_Then_Stop_It(t *testing.T) {
+func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	worker := &JobWorker{
 		jobs: JobsList{},
 		con:  &Cgroup{"/tmp"},
@@ -25,6 +25,7 @@ func TestJobWorker_Can_Start_A_Job_Tail_Logs_Then_Stop_It(t *testing.T) {
 		return
 	}
 
+	// Check the status and it's running
 	status, err := worker.Status(id)
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
@@ -36,13 +37,12 @@ func TestJobWorker_Can_Start_A_Job_Tail_Logs_Then_Stop_It(t *testing.T) {
 		return
 	}
 
+	// Assert output
 	reader, err := worker.Output(id)
 	if err != nil {
 		t.Error("could not get reader for job's output")
 		return
 	}
-
-	// Assert output
 	scanner := bufio.NewScanner(reader)
 	i := 1
 	for scanner.Scan() {
@@ -56,22 +56,27 @@ func TestJobWorker_Can_Start_A_Job_Tail_Logs_Then_Stop_It(t *testing.T) {
 		}
 	}
 
+	// Stop the job
 	if err = worker.Stop(id); err != nil {
 		t.Error("failed to stop job : ", err)
 		return
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
+	// Assert the job is not running
 	status, err = worker.Status(id)
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
 	}
-
 	if status.Running {
 		t.Error("expected job not to be running and it is")
 		return
+	}
+	// Assert exit code -1 since we sent a signal to terminate the job
+	if status.ExitCode != -1 {
+		t.Errorf("expected exit code to be -1 and was %d", status.ExitCode)
 	}
 }
 
@@ -91,16 +96,53 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 		return
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(50 * time.Millisecond)
 
+	// Assert the job is not running
 	status, err := worker.Status(id)
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
 	}
-
 	if status.Running {
 		t.Error("expected job not to be running and it is")
 		return
+	}
+	if status.ExitCode != 0 {
+		t.Errorf("expected exit code to be 0 and was %d", status.ExitCode)
+	}
+}
+
+func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
+	worker := &JobWorker{
+		jobs: JobsList{},
+		con:  &Cgroup{"/tmp"},
+	}
+
+	cmd := "exit 4"
+	opts := NewOpts(100, 100, 50)
+
+	// Run the job
+	id, err := worker.Start(opts, "TEST", cmd)
+	if err != nil {
+		t.Error("failed to start job: ", err)
+		return
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Assert the job is not running
+	status, err := worker.Status(id)
+	if err != nil {
+		t.Error("failed to get status of job: ", err)
+		return
+	}
+	if status.Running {
+		t.Error("expected job not to be running and it is")
+		return
+	}
+	// Assert exit code 4 was set in status
+	if status.ExitCode != 4 {
+		t.Errorf("expected exit code to be 4 and was %d", status.ExitCode)
 	}
 }

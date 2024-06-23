@@ -13,7 +13,7 @@ type tailReader struct {
 	pollInterval time.Duration
 }
 
-// Read calls the normal io.ReadCloser and checks for an io.EOF error and skips returning to sleep instead
+// Read calls the normal io.ReadCloser and checks for an io.EOF error and skips returning, to sleep instead
 func (t tailReader) Read(b []byte) (int, error) {
 	for {
 		n, err := t.ReadCloser.Read(b)

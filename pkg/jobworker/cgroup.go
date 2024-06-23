@@ -10,20 +10,6 @@ type Cgroup struct {
 	rootPath string
 }
 
-// AddProcess writes a given PID to a cgroup of the same name
-// func (cg *Cgroup) AddProcess(name string, pid int) error {
-// 	// Open the cgroups process list
-// 	f, err := os.OpenFile(fmt.Sprintf("%s/%s/cgroup.procs", cg.rootPath, name), os.O_APPEND|os.O_WRONLY, 0644)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	// Write job's PID to cgroup
-// 	if _, err = f.Write([]byte(fmt.Sprintf("%d\n", pid))); err != nil {
-// 		return err
-// 	}
-// 	return f.Close()
-// }
-
 // CreateGroup creates a directory in the cgroup root path to signal cgroup to create a group
 func (cg *Cgroup) CreateGroup(name string) (err error) {
 	groupPath := cg.groupPath(name)

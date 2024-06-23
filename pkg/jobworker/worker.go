@@ -163,7 +163,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 }
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
-// todo will we need to signal again and wait here before deleting cgroup and log file?
+// todo will we need to signal again after SIGTERM and wait here before deleting cgroup and log file?
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
 	defer worker.Unlock()
