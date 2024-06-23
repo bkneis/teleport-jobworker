@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -65,9 +66,11 @@ type ResourceController interface {
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(string, JobOpts) error
+	RootPath() string
 }
 
 // JobWorker implements Worker and will be initiated once by the binary starting the gRPC server
+// todo use logger member so disabling logs or debug level can be set
 type JobWorker struct {
 	sync.RWMutex
 	jobs JobsList
@@ -99,13 +102,13 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 
 	// Prefix the cmd and args with a command to add the PID to the cgroup
 	jobCmd := "bash"
-	cgroup := fmt.Sprintf("/sys/fs/cgroup/%s/cgroup.procs", id)
+	cgroup := fmt.Sprintf("%s/%s/cgroup.procs", worker.con.RootPath(), id)
 	testCmd := fmt.Sprintf("echo $$ >> %s; %s", cgroup, cmd)
+	// todo use string.Builder??
 	for _, arg := range args {
 		testCmd += fmt.Sprintf(" %s", arg)
 	}
 	args = []string{"-c", testCmd}
-	// log.Printf("executing cmd %s %v", jobCmd, args)
 
 	// Create the job
 	job := Job{owner, exec.Command(jobCmd, args...)}
@@ -116,7 +119,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 		return "", err
 	}
 
-	// todo do we need to wait for signal or sleep?
+	// todo do we need to wait for signal or sleep or check a file exists like cgroup.controllers?
 	// Update cgroup controllers to add resource control to process
 	if err = worker.con.AddResourceControl(id, opts); err != nil {
 		log.Print("failed to add resource control")
@@ -128,26 +131,43 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	// todo possible use chroot for working directory
 
 	// Pipe STDOUT and STDERR to a log file
-	log, err := os.Create(fmt.Sprintf("/tmp/%s.log", id)) // todo need to use file permissions
-	job.cmd.Stdout = log
-	job.cmd.Stderr = log
+	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		log.Print("could not create log file for job: ", err)
+		return "", err
+	}
+	job.cmd.Stdout = f
+	job.cmd.Stderr = f
 
 	// Add it to our in memory database of jobs
 	worker.Lock()
 	worker.jobs[id] = &job
+	err = job.cmd.Start()
 	worker.Unlock()
+	if err != nil {
+		log.Print("could not start job ", err)
+		return "", err
+	}
+
+	// todo test, possible need mutex in Job to protect access to cmd in job
+	// go func(j *Job) {
+	// 	j.cmd.Wait()
+	// }(&job)
 
 	// Start the job
-	return id, job.cmd.Start()
+	return id, nil
 }
 
-// Stop request job's termination and remove it's cgroup
+// Stop request a job's termination using SIGTERM and deletes it's cgroup
+// todo will we need to signal again and wait here before deleting cgroup and log file?
+// todo need to use Wait on the exec.Cmd while signalling SIGTERM or spin go routine to do so in Start
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
 	defer worker.Unlock()
 	if err := worker.jobs[id].cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return err
 	}
+	os.Remove(logPath(id))
 	return worker.con.DeleteGroup(id)
 }
 
@@ -160,15 +180,17 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 	if !ok {
 		return JobStatus{}, &JobNotFound{id}
 	}
-	// Get PID and possibly exit code from Process and ProcessState, assume running if ProcessState is nil
+	// Get PID and possible exit code from Process and ProcessState, assume running if ProcessState is nil
 	pid := 0
-	exitCode := 0
-	running := true
 	if job.cmd.Process != nil {
 		pid = job.cmd.Process.Pid
 	}
+	exitCode := 0
+	running := true
+	// todo this doesn't work since we didnt use Wait or Run
+	// todo protect with mutex
 	if job.cmd.ProcessState != nil {
-		running = job.cmd.ProcessState.Exited()
+		running = false // todo why not !job.cmd.ProcessState.Exited()
 		exitCode = job.cmd.ProcessState.ExitCode()
 	}
 	return JobStatus{
@@ -182,5 +204,11 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
 func (worker *JobWorker) Output(id string) (reader io.ReadCloser, err error) {
-	return newTailReader(fmt.Sprintf("/tmp/%s.log", id))
+	return newTailReader(logPath(id), 500*time.Millisecond)
+}
+
+// logPath returns the file path for a job's log
+// In production this would need to be in a folder with resource isolation using the job's PID
+func logPath(id string) string {
+	return fmt.Sprintf("/tmp/%s.log", id)
 }

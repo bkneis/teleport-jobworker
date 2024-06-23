@@ -5,6 +5,7 @@ import (
 	"os"
 )
 
+// Cgroup implements ResourceController and provides a minimal interface for the host's cgroup
 type Cgroup struct {
 	rootPath string
 }
@@ -24,22 +25,30 @@ type Cgroup struct {
 // }
 
 // CreateGroup creates a directory in the cgroup root path to signal cgroup to create a group
-func (cg *Cgroup) CreateGroup(name string) error {
-	return os.Mkdir(fmt.Sprintf("%s/%s", cg.rootPath, name), 0755)
+func (cg *Cgroup) CreateGroup(name string) (err error) {
+	groupPath := cg.groupPath(name)
+	if err := os.Mkdir(groupPath, 0755); err != nil {
+		return err
+	}
+	// todo is this important? if not revert to single liner
+	// check cgroup populated directory
+	// _, err = os.Stat(fmt.Sprintf("%s/cgroup.controllers", groupPath))
+	return err
 }
 
+// DeleteGroup deletes a cgroup's directory signalling cgroup to delete the group
 func (cg *Cgroup) DeleteGroup(name string) error {
-	return os.RemoveAll(fmt.Sprintf("%s/%s", cg.rootPath, name))
+	return os.RemoveAll(cg.groupPath(name))
 }
 
 // updateController overrides a given cgroup controller's interface file with a value
 func (cg *Cgroup) updateController(name string, file, val string) error {
-	controller := fmt.Sprintf("%s/%s/%s", cg.rootPath, name, file)
-	return os.WriteFile(controller, []byte(val), 0644)
+	return os.WriteFile(fmt.Sprintf("%s/%s", cg.groupPath(name), file), []byte(val), 0644)
 }
 
+// AddResourceControl updates the resource control interface file for a given cgroup using JobOpts. The
+// three currently supported are CPU, memory and IO
 func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
-	// Update each of the three supported cgroup controllers with the job options
 	if err = cg.updateController(name, "cpu.weight", fmt.Sprintf("%d", opts.CpuWeight)); err != nil {
 		return err
 	}
@@ -47,4 +56,14 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 		return err
 	}
 	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOLatency)) // todo change to io.latency and use ms
+}
+
+// RootPath todo not sure on this
+func (cg *Cgroup) RootPath() string {
+	return cg.rootPath
+}
+
+// groupPath returns a given cgroup's directory path identified by name
+func (cg *Cgroup) groupPath(name string) string {
+	return fmt.Sprintf("%s/%s", cg.rootPath, name)
 }

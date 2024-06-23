@@ -21,7 +21,7 @@ func Test_tailReader(t *testing.T) {
 	}
 
 	// Create tail reader and read from checking contents
-	reader, err := newTailReader(TEST_FILE)
+	reader, err := newTailReader(TEST_FILE, 20*time.Millisecond)
 	defer reader.Close()
 
 	// Append some "testing n" to emulate a job logging to STDOUT
@@ -41,7 +41,7 @@ func Test_tailReader(t *testing.T) {
 				t.Error("failed to write string to test file", err)
 				return
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 		}
 	}(reader)
 

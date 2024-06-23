@@ -30,15 +30,16 @@ func main() {
 
 	worker := jobworker.New()
 
-	// Capture Ctrl+C and stop job
+	// Capture Ctrl+C and stop job if started
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func() {
+	go func(i string, w *jobworker.JobWorker) {
 		<-c
-		cleanup(id, worker)
-		os.Exit(1)
-	}()
+		cleanup(i, w)
+		// os.Exit(1)
+	}(id, worker)
 
+	// Set current user as owner
 	user, err := user.Current()
 	if err != nil {
 		log.Print(err)
@@ -46,18 +47,17 @@ func main() {
 	}
 
 	// Define job's command and options
-	cmd := "while true; do echo hello; sleep 2; done"
+	cmd := os.Args[1]
+	args := os.Args[2:]
 	opts := jobworker.NewOpts(100, 100, 50)
 
 	// Run the job
-	id, err = worker.Start(opts, user.Name, cmd)
+	id, err = worker.Start(opts, user.Name, cmd, args...)
 	if err != nil {
 		log.Print("failed to start command")
 		log.Print(err)
 		return
 	}
-
-	// log.Printf("Job created with ID %s", id)
 
 	status, err := worker.Status(id)
 	if err != nil {
