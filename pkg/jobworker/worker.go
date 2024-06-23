@@ -121,7 +121,6 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 		return "", err
 	}
 
-	// todo do we need to wait for signal or sleep or check a file exists like cgroup.controllers?
 	// Update cgroup controllers to add resource control to process
 	if err = worker.con.AddResourceControl(id, opts); err != nil {
 		log.Print("failed to add resource control")
@@ -151,7 +150,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 		return "", err
 	}
 
-	// todo test, possible need mutex in Job to protect access to cmd in job
+	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
 	go func(j *Job) {
 		j.cmd.Wait()
 		j.Lock()
@@ -165,7 +164,6 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
 // todo will we need to signal again and wait here before deleting cgroup and log file?
-// todo need to use Wait on the exec.Cmd while signalling SIGTERM or spin go routine to do so in Start
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
 	defer worker.Unlock()
@@ -190,12 +188,12 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 	if job.cmd.Process != nil {
 		pid = job.cmd.Process.Pid
 	}
-	exitCode := 0
+	// Check if running flag has been set after blocking Wait call on job.cmd
 	job.RLock()
 	running := job.running
 	job.RUnlock()
-	if !running { // cmd.Process.State != nil
-		// todo why not !job.cmd.ProcessState.Exited()
+	exitCode := 0
+	if !running {
 		exitCode = job.cmd.ProcessState.ExitCode()
 	}
 	return JobStatus{
