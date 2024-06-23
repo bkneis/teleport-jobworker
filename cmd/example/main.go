@@ -36,7 +36,7 @@ func main() {
 	go func(i string, w *jobworker.JobWorker) {
 		<-c
 		cleanup(i, w)
-		// os.Exit(1)
+		os.Exit(1)
 	}(id, worker)
 
 	// Set current user as owner

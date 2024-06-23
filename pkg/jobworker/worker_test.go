@@ -61,7 +61,7 @@ func TestJobWorker_Can_Start_A_Job_Tail_Logs_Then_Stop_It(t *testing.T) {
 		return
 	}
 
-	time.Sleep(50 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
 	status, err = worker.Status(id)
 	if err != nil {

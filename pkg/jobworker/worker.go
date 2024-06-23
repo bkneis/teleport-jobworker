@@ -18,8 +18,10 @@ type JobsList map[string]*Job // todo maybe make this private and job
 
 // Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner" for authz
 type Job struct {
-	owner string
-	cmd   *exec.Cmd
+	sync.RWMutex
+	running bool
+	owner   string
+	cmd     *exec.Cmd
 }
 
 // JobOpts wraps the options that can be passed to cgroups for the job
@@ -111,7 +113,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	args = []string{"-c", testCmd}
 
 	// Create the job
-	job := Job{owner, exec.Command(jobCmd, args...)}
+	job := Job{running: true, owner: owner, cmd: exec.Command(jobCmd, args...)}
 
 	// Create the cgroup and configure the controllers
 	if err = worker.con.CreateGroup(id); err != nil {
@@ -150,9 +152,12 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	}
 
 	// todo test, possible need mutex in Job to protect access to cmd in job
-	// go func(j *Job) {
-	// 	j.cmd.Wait()
-	// }(&job)
+	go func(j *Job) {
+		j.cmd.Wait()
+		j.Lock()
+		j.running = false
+		j.Unlock()
+	}(&job)
 
 	// Start the job
 	return id, nil
@@ -186,11 +191,11 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 		pid = job.cmd.Process.Pid
 	}
 	exitCode := 0
-	running := true
-	// todo this doesn't work since we didnt use Wait or Run
-	// todo protect with mutex
-	if job.cmd.ProcessState != nil {
-		running = false // todo why not !job.cmd.ProcessState.Exited()
+	job.RLock()
+	running := job.running
+	job.RUnlock()
+	if !running { // cmd.Process.State != nil
+		// todo why not !job.cmd.ProcessState.Exited()
 		exitCode = job.cmd.ProcessState.ExitCode()
 	}
 	return JobStatus{

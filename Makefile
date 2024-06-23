@@ -10,7 +10,7 @@ example:
 # Build the go application natively
 .PHONY: example_race
 example_race:
-	$(VERBOSE) go build -race -v -o example ./cmd/example
+	$(VERBOSE) go build -race -v -o example_race ./cmd/example
 
 .PHONY: proto
 proto:
