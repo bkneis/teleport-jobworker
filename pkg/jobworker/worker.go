@@ -140,7 +140,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	job.cmd.Stdout = f
 	job.cmd.Stderr = f
 
-	// Add it to our in memory database of jobs
+	// Start the job and add it to our in memory database of jobs
 	worker.Lock()
 	worker.jobs[id] = &job
 	err = job.cmd.Start()
@@ -158,7 +158,6 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 		j.Unlock()
 	}(&job)
 
-	// Start the job
 	return id, nil
 }
 
