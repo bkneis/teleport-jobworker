@@ -39,10 +39,10 @@ message JobOpts {
 // be references by other messages in the future
 message JobStatus {
     string id = 1;
-	string owner = 2;
-	int64 pid = 3;
-	bool running = 4;
-	int32 exitCode = 5;
+    string owner = 2;
+    int64 pid = 3;
+    bool running = 4;
+    int32 exitCode = 5;
 }
 
 // Returns job UUID as id to be used for subsequent requests like status, stream, stop and possible error status
