@@ -26,7 +26,8 @@ func (err ErrControllerNotSupported) Error() string {
 func NewCgroup(rootPath string) (cg *Cgroup, err error) {
 	cg = &Cgroup{rootPath}
 	var subtree []byte
-	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.subtree_control")); err != nil {
+	// todo is this needed?
+	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.subtree_control", cg.rootPath)); err != nil {
 		return nil, err
 	}
 	if strings.Contains(string(subtree), "cpu") {

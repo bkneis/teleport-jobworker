@@ -53,11 +53,11 @@ func (status JobStatus) String() string {
 }
 
 // JobNotFound is an error returned when the job ID cannot be found
-type JobNotFound struct {
+type ErrNotFound struct {
 	id string
 }
 
-func (err *JobNotFound) Error() string {
+func (err *ErrNotFound) Error() string {
 	return fmt.Sprintf("could not find job with id %s", err.id)
 }
 
@@ -161,14 +161,39 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 }
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
-// todo wait here before deleting cgroup and log file for gracePeriod
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
 	defer worker.Unlock()
-	if err := worker.jobs[id].cmd.Process.Signal(syscall.SIGTERM); err != nil {
+	job, ok := worker.jobs[id]
+	if !ok {
+		return &ErrNotFound{id}
+	}
+	// Request the process to terminate
+	if err := job.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return err
 	}
-	os.Remove(logPath(id))
+	// Poll the process with a signal 0 to check if it is running
+	running := true
+	killTime := time.Now().Add(time.Minute)
+	for killTime.Unix() > time.Now().Unix() {
+		if err := job.cmd.Process.Signal(syscall.Signal(0)); err != nil {
+			running = false
+			break
+		}
+		time.Sleep(time.Second)
+	}
+	// After 60 second grace period kill the process with SIGKILL if still running
+	if running {
+		if err := job.cmd.Process.Kill(); err != nil {
+			return err
+		}
+	}
+	// Clean up job logs
+	err := os.Remove(logPath(id))
+	if err != nil {
+		return err
+	}
+	// Delete job's cgroup
 	return worker.con.DeleteGroup(id)
 }
 
@@ -179,7 +204,7 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 	// Check the job exists
 	job, ok := worker.jobs[id]
 	if !ok {
-		return JobStatus{}, &JobNotFound{id}
+		return JobStatus{}, &ErrNotFound{id}
 	}
 	// Get PID and possible exit code from Process and ProcessState, assume running if ProcessState is nil
 	pid := 0
