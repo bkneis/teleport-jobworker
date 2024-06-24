@@ -24,6 +24,7 @@ func cleanup(id string, worker *jobworker.JobWorker) {
 	}
 }
 
+// todo move to examples folder in root and move pkg/jobworker to root
 func main() {
 
 	var err error
