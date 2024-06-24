@@ -7,13 +7,20 @@ import (
 	"time"
 )
 
-// JobsList stores a map of the Job's containing the linux process key'd by job id (in memory DB)
-type JobsList map[string]*Job
+// job maintains the exec.Cmd struct (containing the underlying os.Process) and implements Job
+type job struct {
+	cmd *exec.Cmd
+}
 
-// Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner"
-type Job struct {
-	owner string
-	cmd   *exec.Cmd
+func (job *job) Stop() error                    { return nil }
+func (job *job) Status() JobStatus              { return JobStatus{} }
+func (job *job) Output() (io.ReadCloser, error) { return nil, nil }
+
+// Job is returned to the caller with a successful call to Start and provides an API for interacting with the job
+type Job interface {
+	Stop() error                    // sends a SIGTERM to the job's process then polls the process and sends SIGKILL if necessary
+	Status() JobStatus              // returns information of the job's process
+	Output() (io.ReadCloser, error) // returns a io.ReadCloser that tails the job's log file
 }
 
 // JobOpts wraps the options that can be passed to cgroups for the job
@@ -42,28 +49,25 @@ type ResourceController interface {
 	AddResourceControl(JobOpts) error
 }
 
-// JobWorker provides the libraries API on how to start / stop / query status and get output of a job
+// JobWorker provides the Start function that returns a Job based on JobOpts and a command with arguments
 type JobWorker struct {
-	jobs JobsList
-	con  ResourceController
+	con ResourceController
 }
 
-func (worker *JobWorker) Start(opts JobOpts, owner, name string, args ...string) (id string, err error) {
-	return
-}
-func (worker *JobWorker) Stop(id string) error {
-	return nil
-}
-func (worker *JobWorker) Status(id string) JobStatus {
-	return JobStatus{}
-}
-func (worker *JobWorker) Output(id string) (io.ReadCloser, error) {
-	return nil, nil
+// New returns an initialized JobWorker
+func New() *JobWorker {
+	return &JobWorker{}
 }
 
-// Example io.ReadCloser wrapper to tail logs from the os.File
+// Start creates a cgroup, implements resource control and executes a Command with a go routine performing Wait to process the ExitCode
+func (worker *JobWorker) Start(opts JobOpts, name string, args ...string) (id Job, err error) {
+	return &job{}, nil
+}
+
+// Example io.ReadCloser wrapper to tail logs from the os.File and sleep pollInterval before reading again for updates
 type tailReader struct {
 	io.ReadCloser
+	pollInterval time.Duration
 }
 
 func (t tailReader) Read(b []byte) (int, error) {
@@ -74,11 +78,11 @@ func (t tailReader) Read(b []byte) (int, error) {
 		} else if err != io.EOF {
 			return n, err
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(t.pollInterval)
 	}
 }
 
-func newTailReader(fileName string) (tailReader, error) {
+func newTailReader(pollInterval time.Duration, fileName string) (tailReader, error) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		return tailReader{}, err
@@ -87,5 +91,5 @@ func newTailReader(fileName string) (tailReader, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return tailReader{}, err
 	}
-	return tailReader{f}, nil
+	return tailReader{f, pollInterval}, nil
 }

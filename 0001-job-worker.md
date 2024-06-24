@@ -162,25 +162,16 @@ import (
 )
 
 func main() {
-    worker := jobworker.New()
-
     cmd := "while true; do echo hello; sleep 2; done"
 
-    // In the gRPC server the user ID would be extracted from the common name of the client tls cert
-    // For this example we simply use the current linux user
-    user, err := user.Current()
+    // Start the job
+    job, err := jobworker.New().Start(JobOpts{100, "100M", "50ms"}, cmd)
     if err != nil {
         log.Error(err)
         return
     }
-
-    id, err := worker.Start(user.UserName, JobOpts{100, "100M", "50ms"}, cmd)
-    if err != nil {
-        log.Error(err)
-        return
-    }
-
-    status, err := worker.Status(id)
+    // Get the status
+    status, err := job.Status()
     if err != nil {
         log.Error(err)
         return
@@ -191,11 +182,13 @@ func main() {
         return
     }
 
-    reader, err := worker.Output(id)
+    // Get io.ReadCloser to tail job's output
+    reader, err := job.Output()
     if err != nil {
         log.Error("could not get reader for job's output")
         return
     }
+    defer reader.Close()
 
     scanner := bufio.NewScanner(reader)
     for scanner.Scan() {

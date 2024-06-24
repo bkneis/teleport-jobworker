@@ -32,8 +32,15 @@ deactivate server
 
 client -> server: StopRequest
 activate server
-server -> process: Kill
+server -> process: SIGTERM
 server <-- process:
+loop for 60 seconds or until signal 0 fails
+    server -> process: Signal 0
+    process --> server:
+end
+alt command didnt terminate
+    server -> process: SIGKILL
+end
 server -> cgroup: Delete Group
 cgroup --> server: 
 client <-- server: StopResponse
