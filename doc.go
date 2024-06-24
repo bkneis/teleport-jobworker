@@ -16,21 +16,15 @@ const (
 	CgroupGB            = CgroupMB * 1024
 )
 
-// job maintains the exec.Cmd struct (containing the underlying os.Process) and implements Job
-type job struct {
+// job maintains the exec.Cmd struct (containing the underlying os.Process) and implements Job it
+// is returned to the caller with a successful call to Start and provides an API for interacting with the job
+type Job struct {
 	cmd *exec.Cmd
 }
 
-func (job *job) Stop() error                    { return nil }
-func (job *job) Status() JobStatus              { return JobStatus{} }
-func (job *job) Output() (io.ReadCloser, error) { return nil, nil }
-
-// Job is returned to the caller with a successful call to Start and provides an API for interacting with the job
-type Job interface {
-	Stop() error                    // sends a SIGTERM to the job's process then polls the process and sends SIGKILL if necessary
-	Status() JobStatus              // returns information of the job's process
-	Output() (io.ReadCloser, error) // returns a io.ReadCloser that tails the job's log file
-}
+func (job *Job) Stop() error                    { return nil }
+func (job *Job) Status() JobStatus              { return JobStatus{} }
+func (job *Job) Output() (io.ReadCloser, error) { return nil, nil }
 
 // JobOpts wraps the options that can be passed to cgroups for the job
 // details at https://facebookmicrosites.github.io/cgroup2/docs/overview
