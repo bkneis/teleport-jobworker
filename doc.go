@@ -7,6 +7,15 @@ import (
 	"time"
 )
 
+type CgroupByte int64
+
+// Base 2 byte units to parse / set JobOpts.MemLimit
+const (
+	CgroupKB CgroupByte = 1024
+	CgroupMB            = CgroupKB * 1024
+	CgroupGB            = CgroupMB * 1024
+)
+
 // job maintains the exec.Cmd struct (containing the underlying os.Process) and implements Job
 type job struct {
 	cmd *exec.Cmd
@@ -26,9 +35,9 @@ type Job interface {
 // JobOpts wraps the options that can be passed to cgroups for the job
 // details at https://facebookmicrosites.github.io/cgroup2/docs/overview
 type JobOpts struct {
-	CPUWeight int32 // `cpu.weight`
-	MemLimit  int32 // `mem.high` using megabytes as the unit
-	IOLatency int32 // `io.latency` using ms as the unit
+	CPUWeight int32      // `cpu.weight` value between [1, 1000]
+	MemLimit  CgroupByte // `mem.high` bytes to throttle memory usage
+	IOLatency int32      // `io.latency` using ms as the unit
 }
 
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
