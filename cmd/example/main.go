@@ -16,6 +16,7 @@ func cleanup(id string, worker *jobworker.JobWorker) {
 	if id != "" {
 		err := worker.Stop(id)
 		if err != nil {
+			log.Printf("could not stop job %s", id)
 			log.Fatal(err)
 			return
 		}
@@ -29,15 +30,6 @@ func main() {
 	var id string
 
 	worker := jobworker.New()
-
-	// Capture Ctrl+C and stop job if started
-	c := make(chan os.Signal)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(i string, w *jobworker.JobWorker) {
-		<-c
-		cleanup(i, w)
-		os.Exit(1)
-	}(id, worker)
 
 	// Set current user as owner
 	user, err := user.Current()
@@ -58,6 +50,15 @@ func main() {
 		log.Print(err)
 		return
 	}
+
+	// Capture Ctrl+C and stop job if started
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func(i string, w *jobworker.JobWorker) {
+		<-c
+		cleanup(i, w)
+		os.Exit(1)
+	}(id, worker)
 
 	status, err := worker.Status(id)
 	if err != nil {
