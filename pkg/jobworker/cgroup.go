@@ -3,11 +3,42 @@ package jobworker
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 // Cgroup implements ResourceController and provides a minimal interface for the host's cgroup
+// todo do we need to check cgroup.controllers have three supported controllers??
 type Cgroup struct {
 	rootPath string
+}
+
+// ErrControllerNotSupported is returned if the cgroup v2 controller is not supported on the host
+type ErrControllerNotSupported struct {
+	rootPath   string
+	controller string
+}
+
+func (err ErrControllerNotSupported) Error() string {
+	return fmt.Sprintf("cgroup v2 controller %s not available in %s/cgroup.subtree_control", err.controller, err.rootPath)
+}
+
+// NewCgroup returns an initialized Cgroup and checks for controller compatibility on the host
+func NewCgroup(rootPath string) (cg *Cgroup, err error) {
+	cg = &Cgroup{rootPath}
+	var subtree []byte
+	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.subtree_control")); err != nil {
+		return nil, err
+	}
+	if strings.Contains(string(subtree), "cpu") {
+		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+	}
+	if strings.Contains(string(subtree), "memory") {
+		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+	}
+	if strings.Contains(string(subtree), "io") {
+		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+	}
+	return cg, nil
 }
 
 // CreateGroup creates a directory in the cgroup root path to signal cgroup to create a group
@@ -23,6 +54,7 @@ func (cg *Cgroup) CreateGroup(name string) (err error) {
 }
 
 // DeleteGroup deletes a cgroup's directory signalling cgroup to delete the group
+// todo first maybe check cgroup.events https://docs.kernel.org/admin-guide/cgroup-v2.html#basic-operations
 func (cg *Cgroup) DeleteGroup(name string) error {
 	return os.RemoveAll(cg.groupPath(name))
 }
@@ -44,9 +76,9 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOLatency)) // todo change to io.latency and use ms
 }
 
-// RootPath todo not sure on this
-func (cg *Cgroup) RootPath() string {
-	return cg.rootPath
+// ProcsPath returns the file path to append the PID to add to a cgroup
+func (cg *Cgroup) ProcsPath(name string) string {
+	return fmt.Sprintf("%s/cgroup.procs", cg.groupPath(name))
 }
 
 // groupPath returns a given cgroup's directory path identified by name

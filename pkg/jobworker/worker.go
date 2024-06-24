@@ -14,7 +14,7 @@ import (
 )
 
 // JobsList stores a map of the Job's containing the linux process key'd by job id (in memory DB)
-type JobsList map[string]*Job // todo maybe make this private and job
+type JobsList map[string]*Job // todo maybe make this private and job or return it after Start
 
 // Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner" for authz
 type Job struct {
@@ -68,7 +68,7 @@ type ResourceController interface {
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(string, JobOpts) error
-	RootPath() string
+	ProcsPath(string) string
 }
 
 // JobWorker implements Worker and will be initiated once by the binary starting the gRPC server
@@ -104,8 +104,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 
 	// Prefix the cmd and args with a command to add the PID to the cgroup
 	jobCmd := "bash"
-	cgroup := fmt.Sprintf("%s/%s/cgroup.procs", worker.con.RootPath(), id)
-	testCmd := fmt.Sprintf("echo $$ >> %s; %s", cgroup, cmd)
+	testCmd := fmt.Sprintf("echo $$ >> %s; %s", worker.con.ProcsPath(id), cmd)
 	// todo use string.Builder??
 	for _, arg := range args {
 		testCmd += fmt.Sprintf(" %s", arg)
@@ -129,7 +128,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 
 	// Don't inherit environment from parent
 	job.cmd.Env = []string{}
-	// todo possible use chroot for working directory
+	// todo should we use chroot for working directory??
 
 	// Pipe STDOUT and STDERR to a log file
 	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
@@ -162,7 +161,7 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 }
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
-// todo will we need to signal again after SIGTERM and wait here before deleting cgroup and log file?
+// todo wait here before deleting cgroup and log file for gracePeriod
 func (worker *JobWorker) Stop(id string) error {
 	worker.Lock()
 	defer worker.Unlock()
@@ -205,6 +204,7 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
+// todo parameterize pollInterval
 func (worker *JobWorker) Output(id string) (reader io.ReadCloser, err error) {
 	return newTailReader(logPath(id), 500*time.Millisecond)
 }
