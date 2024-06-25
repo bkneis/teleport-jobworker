@@ -51,13 +51,11 @@ type JobStatus struct {
 }
 
 func (status JobStatus) String() string {
-	return fmt.Sprintf(`
-		Job Status
-		ID	 %s
-		PID	 %d
-		Running	 %t
-		ExitCode %d
-	`, status.ID, status.PID, status.Running, status.ExitCode)
+	return fmt.Sprintf(`Job Status
+	ID	     %s
+	PID	     %d
+	Running	 %t
+	ExitCode %d`, status.ID, status.PID, status.Running, status.ExitCode)
 }
 
 // ResourceController defines the interface for implementing resource control of new processes

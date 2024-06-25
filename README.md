@@ -32,7 +32,7 @@ Lint the code for static analysis
 
 Example long lived command with tailing
 
-`./worker "while true; do echo hello; sleep 2; done"`
+`./example bash -c "while true; do echo hello; sleep 2; done"`
 
 Ctrl+C to signal example to stop the job
 
@@ -41,6 +41,7 @@ View test coverage
 
 ## Testing cgroups v2
 
+### Using the host
 Install stress tool
 
 `apt install stress`
@@ -53,26 +54,22 @@ Update resource controllers
 
 ```bash
 echo "100M" > memory.high
-echo "200M" > memory.max
 echo "100" > cpu.weight
-echo "100000 1000000" > cpu.max
 echo "default 100" > io.weight
 ```
 todo use io.latency
 
 Add process ID
 
-`echo $$ >> /sys/fs/cgroup/test/cgroup.procs`
-
-Start another terminal session and watch for updates to
-
-`cpu.pressure`
+`echo $$ >> cgroup.procs`
 
 Test CPU controller
 
 `stress --cpu 8`
 
-And ensure the stall time for the averages are not 0
+then start another terminal session and watch for updates to
+
+`cpu.pressure`
 
 Test IO controller
 
@@ -82,8 +79,6 @@ And watch
 
 `io.pressure`
 
-And ensure the stall time for the averages are not 0
-
 Test memory controller
 
 `dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock`
@@ -92,17 +87,88 @@ And watch
 
 `memory.pressure`
 
-And ensure the stall time for the averages are not 0
+### Using the golang library / example
 
 You should then be able to do the same using the golang library
 
-./example bash -c "apt install -y stress && stress --cpu 2"
+```
+./example bash -c "stress --cpu 2" &
 
-./example bash -c "apt install -y stress && stress --io 2 --vm 2"
+./example bash -c "stress --io 2 --vm 2" &
 
-Check the cgroup files using Job UUID
+./example bash -c "dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock" &
 
-`export job_uuid=`
-`cat /sys/fs/cgroup/${job_uuid}/cpu.pressure`
-`cat /sys/fs/cgroup/${job_uuid}/io.pressure`
-`cat /sys/fs/cgroup/${job_uuid}/memory.pressure`
+Check the cgroup PSI files using the Job UUIDs
+
+cat /sys/fs/cgroup/{job_uuid}/cpu.pressure
+cat /sys/fs/cgroup/{job_uuid}/io.pressure
+cat /sys/fs/cgroup/{job_uuid}/memory.pressure
+```
+
+Below are some example outputs running on my machine
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ uname -a
+Linux marvin 5.15.0-107-generic #117~20.04.1-Ubuntu SMP Tue Apr 30 10:35:57 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+➜  teleport-jobworker git:(feature/v1) ✗ lscpu
+CPU(s):                             8
+Thread(s) per core:                 2
+Core(s) per socket:                 4
+Socket(s):                          1
+Model name:                         AMD Ryzen 7 PRO 3700U w/ Radeon Vega Mobile Gfx
+```
+
+Example output for CPU
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --cpu 8" &
+[1] 1128960
+Job Status                                                                                                                                                                                     
+	ID	     09934f7f-112e-46c0-9b2f-39c32ac015d8
+	PID	     1128975
+	Running	 true
+	ExitCode 0
+Job's logs
+
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/09934f7f-112e-46c0-9b2f-39c32ac015d8/cpu.pressure 
+some avg10=0.73 avg60=0.25 avg300=0.05 total=302563
+full avg10=0.73 avg60=0.25 avg300=0.05 total=283476
+
+➜  teleport-jobworker git:(feature/v1) ✗ pkill -9 -f example
+```
+
+Example output for IO
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --io 2 --vm 2"
+Job Status
+	ID	     ca7181f4-7c76-4850-b48c-f66b4e35f9e2
+	PID	     1138790
+	Running	 true
+	ExitCode 0
+Job's logs
+
+➜  teleport-jobworker git:(feature/v1) ✗ sudo cat /sys/fs/cgroup/ca7181f4-7c76-4850-b48c-f66b4e35f9e2/io.pressure 
+[sudo] password for arthur: 
+some avg10=19.65 avg60=7.25 avg300=1.75 total=5697270
+full avg10=17.97 avg60=6.70 avg300=1.62 total=5252884
+```
+
+Example output for memory
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "dd if=/dev/urandom of=/dev/shm/sample9.txt bs=1G count=2 iflag=fullblock"
+Job Status
+	ID	     0564cfd1-3224-43f4-ac38-efbe755f0c91
+	PID	     1149656
+	Running	 true
+	ExitCode 0
+Job's logs
+2+0 records in
+2+0 records out
+2147483648 bytes (2.1 GB, 2.0 GiB) copied, 23.8283 s, 90.1 MB/s
+
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/0564cfd1-3224-43f4-ac38-efbe755f0c91/memory.pressure 
+some avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
+full avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
+```

@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"log"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -15,11 +15,11 @@ func cleanup(id string, job *jobworker.Job) {
 	if job != nil {
 		err := job.Stop()
 		if err != nil {
-			log.Printf("could not stop job %s", id)
-			log.Fatal(err)
+			fmt.Printf("could not stop job %s", id)
+			fmt.Print(err)
 			return
 		}
-		log.Printf("Stopped job %s", job.ID)
+		fmt.Printf("Stopped job %s", job.ID)
 	}
 }
 
@@ -34,8 +34,8 @@ func main() {
 	// Run the job
 	job, err := jobworker.Start(opts, cmd, args...)
 	if err != nil {
-		log.Print("failed to start command")
-		log.Print(err)
+		fmt.Print("failed to start command")
+		fmt.Print(err)
 		return
 	}
 	// Capture Ctrl+C and stop job if started
@@ -49,27 +49,29 @@ func main() {
 	// Check the status
 	status, err := job.Status()
 	if err != nil {
-		log.Print("failed to get status")
-		log.Print(err)
+		fmt.Print("failed to get status")
+		fmt.Print(err)
 		return
 	}
 	// Check is running
-	log.Print(status)
+	fmt.Println(status)
 	if !status.Running {
-		log.Print("job not running")
+		fmt.Print("job not running")
 		return
 	}
 	// Get io.ReadCloser tailing job logs
 	reader, err := job.Output()
 	if err != nil {
-		log.Print("could not get reader for job's output")
+		fmt.Print("could not get reader for job's output")
 		return
 	}
+	defer reader.Close()
+
 	// Log output to STDOUT
-	log.Print("Job's logs")
+	fmt.Println("Job logs")
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		line := scanner.Text()
-		log.Printf("%s\n", line)
+		fmt.Printf("%s\n", line)
 	}
 }
