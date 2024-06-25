@@ -38,3 +38,71 @@ Ctrl+C to signal example to stop the job
 
 View test coverage
 `make coverage`
+
+## Testing cgroups v2
+
+Install stress tool
+
+`apt install stress`
+
+Create test cgroup
+
+`mkdir /sys/fs/cgroup/test && cd /sys/fs/cgroup/test`
+
+Update resource controllers
+
+```bash
+echo "100M" > memory.high
+echo "200M" > memory.max
+echo "100" > cpu.weight
+echo "100000 1000000" > cpu.max
+echo "default 100" > io.weight
+```
+todo use io.latency
+
+Add process ID
+
+`echo $$ >> /sys/fs/cgroup/test/cgroup.procs`
+
+Start another terminal session and watch for updates to
+
+`cpu.pressure`
+
+Test CPU controller
+
+`stress --cpu 8`
+
+And ensure the stall time for the averages are not 0
+
+Test IO controller
+
+`stress --io 2 --vm 2`
+
+And watch
+
+`io.pressure`
+
+And ensure the stall time for the averages are not 0
+
+Test memory controller
+
+`dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock`
+
+And watch
+
+`memory.pressure`
+
+And ensure the stall time for the averages are not 0
+
+You should then be able to do the same using the golang library
+
+./example bash -c "apt install -y stress && stress --cpu 2"
+
+./example bash -c "apt install -y stress && stress --io 2 --vm 2"
+
+Check the cgroup files using Job UUID
+
+`export job_uuid=`
+`cat /sys/fs/cgroup/${job_uuid}/cpu.pressure`
+`cat /sys/fs/cgroup/${job_uuid}/io.pressure`
+`cat /sys/fs/cgroup/${job_uuid}/memory.pressure`
