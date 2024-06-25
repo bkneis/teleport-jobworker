@@ -46,7 +46,7 @@ type JobStatus struct {
 // ResourceController defines the interface for implementing resource control of new processes
 // In cgroups this will be creating, editing and deleting files in /sys/fs/cgroup
 type ResourceController interface {
-	AddProcess(int) error
+	AddProcess(string, *exec.Cmd) error
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(JobOpts) error
