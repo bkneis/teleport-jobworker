@@ -2,8 +2,11 @@ package jobworker
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"strings"
+	"syscall"
 )
 
 // Cgroup implements ResourceController and provides a minimal interface for the host's cgroup
@@ -40,6 +43,22 @@ func NewCgroup(rootPath string) (cg *Cgroup, err error) {
 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
 	}
 	return cg, nil
+}
+
+func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
+	// Add job's process to cgroup
+	f, err := syscall.Open(cg.groupPath(name), 0x200000, 0)
+	if err != nil {
+		log.Print("could not open procs file")
+		return err
+	}
+
+	// This is where clone args and namespaces for user, PID and fs can be set
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		UseCgroupFD: true,
+		CgroupFD:    f,
+	}
+	return nil
 }
 
 // CreateGroup creates a directory in the cgroup root path to signal cgroup to create a group

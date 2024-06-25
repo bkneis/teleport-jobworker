@@ -64,7 +64,7 @@ func (err *ErrNotFound) Error() string {
 // ResourceController defines the interface for implementing resource control of new processes
 // In cgroups this will be creating, editing and deleting files in /sys/fs/cgroup
 type ResourceController interface {
-	// AddProcess(string, int) error
+	AddProcess(string, *exec.Cmd) error
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(string, JobOpts) error
@@ -103,16 +103,16 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	id = uuid.New().String()
 
 	// Prefix the cmd and args with a command to add the PID to the cgroup
-	jobCmd := "bash"
-	testCmd := fmt.Sprintf("echo $$ >> %s; %s", worker.con.ProcsPath(id), cmd)
-	// todo use string.Builder??
-	for _, arg := range args {
-		testCmd += fmt.Sprintf(" %s", arg)
-	}
-	args = []string{"-c", testCmd}
+	// jobCmd := "bash"
+	// testCmd := fmt.Sprintf("echo $$ >> %s; %s", worker.con.ProcsPath(id), cmd)
+	// // todo use string.Builder??
+	// for _, arg := range args {
+	// 	testCmd += fmt.Sprintf(" %s", arg)
+	// }
+	// args = []string{"-c", testCmd}
 
 	// Create the job
-	job := Job{running: true, owner: owner, cmd: exec.Command(jobCmd, args...)}
+	job := Job{running: true, owner: owner, cmd: exec.Command(cmd, args...)}
 
 	// Create the cgroup and configure the controllers
 	if err = worker.con.CreateGroup(id); err != nil {
@@ -126,18 +126,37 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 		return "", err
 	}
 
+	// // Add job's process to cgroup
+	// f, err := syscall.Open(fmt.Sprintf("/sys/fs/cgroup/%s", id), 0x200000, 0)
+	// if err != nil {
+	// 	log.Print("could not open procs file")
+	// 	return "", err
+	// }
+	// defer syscall.Close(f)
+
+	// // This is where clone args and namespaces for user, PID and fs can be set
+	// job.cmd.SysProcAttr = &syscall.SysProcAttr{
+	// 	UseCgroupFD: true,
+	// 	CgroupFD:    f,
+	// }
+	if err = worker.con.AddProcess(id, job.cmd); err != nil {
+		log.Print("failed to add process to cgroup")
+		return "", err
+	}
+	defer syscall.Close(job.cmd.SysProcAttr.CgroupFD)
+
 	// Don't inherit environment from parent
 	job.cmd.Env = []string{}
 	// todo should we use chroot for working directory??
 
 	// Pipe STDOUT and STDERR to a log file
-	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
+	lf, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		log.Print("could not create log file for job: ", err)
 		return "", err
 	}
-	job.cmd.Stdout = f
-	job.cmd.Stderr = f
+	job.cmd.Stdout = lf
+	job.cmd.Stderr = lf
 
 	// Start the job and add it to our in memory database of jobs
 	worker.Lock()
@@ -150,12 +169,13 @@ func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) 
 	}
 
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
-	go func(j *Job) {
+	go func(j *Job, logFile *os.File) {
 		j.cmd.Wait()
 		j.Lock()
 		j.running = false
 		j.Unlock()
-	}(&job)
+		logFile.Close()
+	}(&job, lf)
 
 	return id, nil
 }
