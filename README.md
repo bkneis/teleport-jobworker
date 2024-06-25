@@ -12,15 +12,19 @@ The library assumes a 64 bit linux system with cgroups v2, no assurances are pro
 ## How to
 
 Build the example
+
 `make example`
 
 or with the race detector enabled
+
 `make example_race`
 
 Run the libraries unit tests
+
 `make test`
 
 or with the race detector
+
 `make race_test`
 
 Generate the protobuf go & grpc definitions after updating `pkg/proto/worker.proto`
@@ -28,7 +32,12 @@ Generate the protobuf go & grpc definitions after updating `pkg/proto/worker.pro
 `make proto`
 
 Lint the code for static analysis
+
 `make lint`
+
+View test coverage
+
+`make coverage`
 
 Example long lived command with tailing
 
@@ -36,8 +45,11 @@ Example long lived command with tailing
 
 Ctrl+C to signal example to stop the job
 
-View test coverage
-`make coverage`
+The example catches SIGTERM so it's also possible to run it in the background
+
+`./example bash -c "while true; do echo hello; sleep 2; done" &`
+
+Then use something like `pkill -f example` in order to send the SIGTERM to example and gracefully stop the Job and delete the cgroup.
 
 ## Testing cgroups v2
 
@@ -65,27 +77,31 @@ Add process ID
 
 Test CPU controller
 
-`stress --cpu 8`
+`stress --cpu 8 &`
 
 then start another terminal session and watch for updates to
 
-`cpu.pressure`
+`cat cpu.pressure`
 
 Test IO controller
 
-`stress --io 2 --vm 2`
+`pkill -f stress && stress --io 2 --vm 2 &`
 
 And watch
 
-`io.pressure`
+`cat io.pressure`
 
 Test memory controller
 
-`dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock`
+`pkill -f stress && dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock`
 
 And watch
 
-`memory.pressure`
+`cat memory.pressure`
+
+Kill memory test
+
+`pkill -f "dd if=/dev/urandom"`
 
 ### Using the golang library / example
 
@@ -97,13 +113,19 @@ You should then be able to do the same using the golang library
 ./example bash -c "stress --io 2 --vm 2" &
 
 ./example bash -c "dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock" &
+```
 
-Check the cgroup PSI files using the Job UUIDs
+Check the cgroup PSI files using the Job UUIDs and stop the tests
 
+```
 cat /sys/fs/cgroup/{job_uuid}/cpu.pressure
 cat /sys/fs/cgroup/{job_uuid}/io.pressure
 cat /sys/fs/cgroup/{job_uuid}/memory.pressure
+
+pkill -f example
 ```
+
+### Testing results on dev machine
 
 Below are some example outputs running on my machine
 
@@ -116,6 +138,11 @@ Thread(s) per core:                 2
 Core(s) per socket:                 4
 Socket(s):                          1
 Model name:                         AMD Ryzen 7 PRO 3700U w/ Radeon Vega Mobile Gfx
+...
+➜  teleport-jobworker git:(feature/v1) ✗ lsmem 
+RANGE                                 SIZE  STATE REMOVABLE  BLOCK
+...
+Total online memory:      14G
 ```
 
 Example output for CPU
@@ -134,7 +161,7 @@ Job's logs
 some avg10=0.73 avg60=0.25 avg300=0.05 total=302563
 full avg10=0.73 avg60=0.25 avg300=0.05 total=283476
 
-➜  teleport-jobworker git:(feature/v1) ✗ pkill -9 -f example
+➜  teleport-jobworker git:(feature/v1) ✗ pkill -f example
 ```
 
 Example output for IO
@@ -148,8 +175,7 @@ Job Status
 	ExitCode 0
 Job's logs
 
-➜  teleport-jobworker git:(feature/v1) ✗ sudo cat /sys/fs/cgroup/ca7181f4-7c76-4850-b48c-f66b4e35f9e2/io.pressure 
-[sudo] password for arthur: 
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/ca7181f4-7c76-4850-b48c-f66b4e35f9e2/io.pressure 
 some avg10=19.65 avg60=7.25 avg300=1.75 total=5697270
 full avg10=17.97 avg60=6.70 avg300=1.62 total=5252884
 ```

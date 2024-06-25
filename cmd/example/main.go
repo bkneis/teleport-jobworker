@@ -3,48 +3,47 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/teleport-jobworker/pkg/jobworker"
 )
 
-// cleanup is called after capturing Ctrl+C and used to delete the started job
-func cleanup(job *jobworker.Job) {
-	if job != nil {
-		err := job.Stop()
-		if err != nil {
-			fmt.Printf("could not stop job %s\n", job.ID)
-			fmt.Print(err)
-			return
-		}
-		fmt.Printf("Stopped job %s\n", job.ID)
-	}
-}
-
 // Example usage: ./example bash -c "echo hello"
 func main() {
 	var err error
+	if len(os.Args) < 2 {
+		fmt.Print(`Not enough arguments, usage: ./example bash -c "echo hello"`)
+		return
+	}
 	// Define job's command and options
-	cmd := os.Args[1]
-	args := os.Args[2:]
 	opts := jobworker.NewOpts(100, 50, 100*jobworker.CgroupMB)
 	// Run the job
-	job, err := jobworker.Start(opts, cmd, args...)
+	job, err := jobworker.Start(opts, os.Args[1], os.Args[2:]...)
 	if err != nil {
 		fmt.Print("failed to start command")
 		fmt.Print(err)
 		return
 	}
-	// Capture Ctrl+C and stop job if started
+	// Capture Ctrl+C and stop job
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(j *jobworker.Job) {
+	go func(j *jobworker.Job, w *sync.WaitGroup) {
 		<-c
-		cleanup(j)
-		os.Exit(1)
-	}(job)
+		defer wg.Done()
+		if err := job.Stop(); err != nil {
+			fmt.Print(err)
+			return
+		}
+		fmt.Printf("Stopped job %s\n", job.ID)
+
+	}(job, wg)
+
 	// Check the status
 	status, err := job.Status()
 	if err != nil {
@@ -52,7 +51,7 @@ func main() {
 		fmt.Print(err)
 		return
 	}
-	// Check is running
+	// Check it's running
 	fmt.Println(status)
 	if !status.Running {
 		fmt.Print("job not running")
@@ -66,11 +65,17 @@ func main() {
 	}
 	defer reader.Close()
 
-	// Log output to STDOUT
+	// Print logs to STDOUT
 	fmt.Println("Job logs")
-	scanner := bufio.NewScanner(reader)
-	for scanner.Scan() {
-		line := scanner.Text()
-		fmt.Printf("%s\n", line)
-	}
+	go func(r io.ReadCloser) {
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			line := scanner.Text()
+			fmt.Printf("%s\n", line)
+		}
+	}(reader)
+
+	// Wait for Ctrl+C
+	wg.Wait()
+	os.Exit(1)
 }

@@ -122,9 +122,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
 	go func(runningJob *Job, logFile *os.File) {
 		runningJob.cmd.Wait()
-		runningJob.Lock()
-		runningJob.running = false
-		runningJob.Unlock()
+		runningJob.setRunning(false)
 		logFile.Close()
 	}(j, f)
 	return j, nil
@@ -132,7 +130,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
 func (job *Job) Stop() error {
-	// Regardless of signalling errors ensure we clean up the job's log file and cgroup
+	// Regardless of signalling errors, ensure we clean up the job's log file and cgroup
 	defer func() {
 		os.Remove(logPath(job.ID))
 		job.con.DeleteGroup(job.ID)
@@ -143,15 +141,15 @@ func (job *Job) Stop() error {
 	}
 	// Poll the process with a signal 0 to check if it is running
 	running := true
-	killTime := time.Now().Add(time.Minute) // todo again in production would make configurable
+	killTime := time.Now().Add(STOP_GRACE_PERIOD)
 	for killTime.Unix() > time.Now().Unix() {
 		if err := job.cmd.Process.Signal(syscall.Signal(0)); err != nil {
 			running = false
 			break
 		}
-		time.Sleep(time.Second) // todo again in production would make configurable
+		time.Sleep(STOP_POLL_INTERVAL)
 	}
-	// After 60 second grace period kill the process with SIGKILL if still running
+	// After 60 second grace period, kill the process with SIGKILL if still running
 	if running {
 		if err := job.cmd.Process.Kill(); err != nil {
 			return fmt.Errorf("failed to send SIGKILL job: %w", err)
@@ -168,9 +166,7 @@ func (job *Job) Status() (JobStatus, error) {
 		pid = job.cmd.Process.Pid
 	}
 	// Check if running flag has been set after blocking Wait call on job.cmd
-	job.RLock()
-	running := job.running
-	job.RUnlock()
+	running := job.isRunning()
 	exitCode := 0
 	if !running {
 		exitCode = job.cmd.ProcessState.ExitCode()
@@ -185,11 +181,23 @@ func (job *Job) Status() (JobStatus, error) {
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
 func (job *Job) Output() (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), 500*time.Millisecond) // todo again in production would make configurable
+	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL)
+}
+
+func (job *Job) setRunning(running bool) {
+	job.Lock()
+	defer job.Unlock()
+	job.running = running
+}
+
+func (job *Job) isRunning() bool {
+	job.RLock()
+	defer job.RUnlock()
+	return job.running
 }
 
 // logPath returns the file path for a job's log
-// todo in production this would need to be in a folder with resource isolation using the job's PID
+// TODO in production this would need to be in a folder with resource isolation using the job's PID
 func logPath(id string) string {
 	return fmt.Sprintf("/tmp/%s.log", id)
 }

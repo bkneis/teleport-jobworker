@@ -20,7 +20,7 @@ type ErrControllerNotSupported struct {
 }
 
 func (err ErrControllerNotSupported) Error() string {
-	return fmt.Sprintf("cgroup v2 controller %s not available in %s/cgroup.subtree_control", err.controller, err.rootPath)
+	return fmt.Sprintf("cgroup v2 controller %s not available in %s/cgroup.controllers", err.controller, err.rootPath)
 }
 
 // NewCgroup returns an initialized Cgroup and checks for controller compatibility on the host
@@ -28,7 +28,7 @@ func NewCgroup(rootPath string) (cg *Cgroup, err error) {
 	cg = &Cgroup{rootPath}
 	var subtree []byte
 	// todo is this needed?
-	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.subtree_control", cg.rootPath)); err != nil {
+	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.controllers", cg.rootPath)); err != nil {
 		return nil, err
 	}
 	if strings.Contains(string(subtree), "cpu") {
@@ -43,6 +43,7 @@ func NewCgroup(rootPath string) (cg *Cgroup, err error) {
 	return cg, nil
 }
 
+// AddProcess mutates the given cmd to instruct go to add the PID of the started process to a given cgroup
 func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
 	// Add job's process to cgroup
 	f, err := syscall.Open(cg.groupPath(name), 0x200000, 0)
