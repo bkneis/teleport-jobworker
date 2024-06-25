@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 )
 
@@ -23,25 +22,25 @@ func (err ErrControllerNotSupported) Error() string {
 	return fmt.Sprintf("cgroup v2 controller %s not available in %s/cgroup.controllers", err.controller, err.rootPath)
 }
 
+// Are these sanity checks needed??
 // NewCgroup returns an initialized Cgroup and checks for controller compatibility on the host
-func NewCgroup(rootPath string) (cg *Cgroup, err error) {
-	cg = &Cgroup{rootPath}
-	var subtree []byte
-	// todo is this needed?
-	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.controllers", cg.rootPath)); err != nil {
-		return nil, err
-	}
-	if strings.Contains(string(subtree), "cpu") {
-		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-	}
-	if strings.Contains(string(subtree), "memory") {
-		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-	}
-	if strings.Contains(string(subtree), "io") {
-		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-	}
-	return cg, nil
-}
+// func NewCgroup(rootPath string) (cg *Cgroup, err error) {
+// 	cg = &Cgroup{rootPath}
+// 	var subtree []byte
+// 	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.controllers", cg.rootPath)); err != nil {
+// 		return nil, err
+// 	}
+// 	if strings.Contains(string(subtree), "cpu") {
+// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+// 	}
+// 	if strings.Contains(string(subtree), "memory") {
+// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+// 	}
+// 	if strings.Contains(string(subtree), "io") {
+// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
+// 	}
+// 	return cg, nil
+// }
 
 // AddProcess mutates the given cmd to instruct go to add the PID of the started process to a given cgroup
 func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
@@ -64,14 +63,14 @@ func (cg *Cgroup) CreateGroup(name string) (err error) {
 	if err := os.Mkdir(groupPath, 0755); err != nil {
 		return err
 	}
-	// todo is this important? if not revert to single liner
+	// Are these sanity checks needed??
 	// check cgroup populated directory
 	// _, err = os.Stat(fmt.Sprintf("%s/cgroup.controllers", groupPath))
 	return err
 }
 
 // DeleteGroup deletes a cgroup's directory signalling cgroup to delete the group
-// todo first maybe check cgroup.events https://docs.kernel.org/admin-guide/cgroup-v2.html#basic-operations
+// first maybe check cgroup.events https://docs.kernel.org/admin-guide/cgroup-v2.html#basic-operations
 func (cg *Cgroup) DeleteGroup(name string) error {
 	return os.RemoveAll(cg.groupPath(name))
 }

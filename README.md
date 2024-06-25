@@ -1,13 +1,13 @@
 # JobWorker
-jobworker is a simple golang library &amp; gRPC server / client that executes arbitrary linux processes with options for resource control using cgroups v2.
+jobworker is a simple golang library that executes arbitrary linux processes with options for resource control using cgroups v2.
 
 The golang library uses the host file system to manage cgroups, where directory and files are created / delete in the cgroup root dir `/sys/fs/cgroup`.
 
-Executing the linux command is done using `exec.Cmd` where the command is wrapped in a bash session that adds it's PID to the cgroup before executing the command.
+Executing the linux command is executed using `exec.Cmd` where the Cmd is wrapped in a Job struct that provides an API for managing the process.
 
 This repo also contains a simple example of how to use the library. This is not the gRPC client and CLI, just an example usage of the golang library.
 
-The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups has correctly performed a request. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created. Such as stat'ing a file like cgroup.controllers.
+The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups has correctly performed a request. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created. Such as stat'ing a file like cgroup.controllers or ensuring it has the supported controllers.
 
 ## How to
 
