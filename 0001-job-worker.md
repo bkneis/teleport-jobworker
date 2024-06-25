@@ -162,10 +162,12 @@ import (
 )
 
 func main() {
-    cmd := "while true; do echo hello; sleep 2; done"
+
+    cmd := "bash"
+    args := []string{"-c", `"while true; do echo hello; sleep 2; done"`}
 
     // Start the job
-    job, err := jobworker.New().Start(JobOpts{100, 100 * jobworker.CgroupMB, 50}, cmd)
+    job, err := jobworker.New().Start(JobOpts{100, 100 * jobworker.CgroupMB, 50}, cmd, args)
     if err != nil {
         log.Error(err)
         return
