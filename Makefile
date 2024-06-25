@@ -7,6 +7,10 @@ lint:
 example:
 	$(VERBOSE) go build -v -o example ./cmd/example
 
+.PHONY: example_profiler
+example_profiler:
+	$(VERBOSE) go build -tags profiler -v -o example_profiler ./cmd/example
+
 # Build the go application natively
 .PHONY: example_race
 example_race:

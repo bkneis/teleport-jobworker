@@ -23,3 +23,8 @@ go.work.sum
 
 # unit coverage
 cover.out
+
+# binaries
+example
+example_profiler
+example_race
