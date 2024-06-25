@@ -15,9 +15,17 @@ Build the example
 
 `make example`
 
-or with the race detector enabled
+or with the race detector and profiler enabled
 
-`make example_race`
+`make example_debug`
+
+Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates 100 clients tailing the logs of one job.
+
+```
+make concurrent
+./concurrent bash -c "while true; do echo hello; sleep 0.2; done"
+google-chrome http://localhost:6060/debug/pprof/
+```
 
 Run the libraries unit tests
 

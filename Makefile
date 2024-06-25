@@ -7,14 +7,9 @@ lint:
 example:
 	$(VERBOSE) go build -v -o example ./cmd/example
 
-.PHONY: example_profiler
-example_profiler:
-	$(VERBOSE) go build -tags profiler -v -o example_profiler ./cmd/example
-
-# Build the go application natively
-.PHONY: example_race
-example_race:
-	$(VERBOSE) go build -race -v -o example_race ./cmd/example
+.PHONY: example_debug
+example_debug:
+	$(VERBOSE) go build -race -tags profiler -v -o example_debug ./cmd/example
 
 .PHONY: concurrent
 concurrent:
