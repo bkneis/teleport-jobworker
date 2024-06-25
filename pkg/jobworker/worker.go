@@ -92,44 +92,35 @@ func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 // set's it to the exec.Cmd STDOUT and STDERR. Then it wraps the command executed for the job to add the PID to the cgroup
 // before running the actual job's command
 func StartWithController(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
-	id := uuid.New().String()
-
 	// Create the job
-	j = NewJob(id, exec.Command(cmd, args...), con)
-
+	j = NewJob(uuid.New().String(), exec.Command(cmd, args...), con)
 	// Create the cgroup and configure the controllers
-	if err = j.con.CreateGroup(id); err != nil {
+	if err = j.con.CreateGroup(j.ID); err != nil {
 		return nil, err
 	}
-
 	// Update cgroup controllers to add resource control to process
-	if err = j.con.AddResourceControl(id, opts); err != nil {
+	if err = j.con.AddResourceControl(j.ID, opts); err != nil {
 		return nil, err
 	}
-
 	// Add job's process to cgroup
-	if err = j.con.AddProcess(id, j.cmd); err != nil {
+	if err = j.con.AddProcess(j.ID, j.cmd); err != nil {
 		return nil, err
 	}
 	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
-
 	// Don't inherit environment from parent
 	j.cmd.Env = []string{}
-
 	// Pipe STDOUT and STDERR to a log file
-	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
+	f, err := os.OpenFile(logPath(j.ID), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		return nil, err
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
-
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
 		return nil, err
 	}
-
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
 	go func(runningJob *Job, logFile *os.File) {
 		runningJob.cmd.Wait()
@@ -138,7 +129,6 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		runningJob.Unlock()
 		logFile.Close()
 	}(j, f)
-
 	return j, nil
 }
 

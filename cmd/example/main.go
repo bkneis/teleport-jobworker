@@ -23,16 +23,14 @@ func cleanup(id string, job *jobworker.Job) {
 	}
 }
 
+// Example usage: ./example bash -c "echo hello"
 func main() {
-
 	var err error
 	var id string
-
 	// Define job's command and options
 	cmd := os.Args[1]
 	args := os.Args[2:]
 	opts := jobworker.NewOpts(100, 50, 100*jobworker.CgroupMB)
-
 	// Run the job
 	job, err := jobworker.Start(opts, cmd, args...)
 	if err != nil {
@@ -40,7 +38,6 @@ func main() {
 		log.Print(err)
 		return
 	}
-
 	// Capture Ctrl+C and stop job if started
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
@@ -49,27 +46,25 @@ func main() {
 		cleanup(i, j)
 		os.Exit(1)
 	}(id, job)
-
+	// Check the status
 	status, err := job.Status()
 	if err != nil {
 		log.Print("failed to get status")
 		log.Print(err)
 		return
 	}
-
+	// Check is running
 	log.Print(status)
 	if !status.Running {
 		log.Print("job not running")
 		return
 	}
-
 	// Get io.ReadCloser tailing job logs
 	reader, err := job.Output()
 	if err != nil {
 		log.Print("could not get reader for job's output")
 		return
 	}
-
 	// Log output to STDOUT
 	log.Print("Job's logs")
 	scanner := bufio.NewScanner(reader)

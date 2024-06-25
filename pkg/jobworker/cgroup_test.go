@@ -30,7 +30,6 @@ func TestCgroupController(t *testing.T) {
 		return
 	}
 	cgroup := Cgroup{"/tmp/"}
-
 	// TEST CreateGroup
 	err = cgroup.CreateGroup(TEST_NAME)
 	if err != nil {
@@ -81,7 +80,6 @@ func TestCgroupController(t *testing.T) {
 		t.Errorf("IO latency is incorrect: %v", err)
 		return
 	}
-
 	// TEST DeleteGroup
 	err = cgroup.DeleteGroup(TEST_NAME)
 	if err != nil {

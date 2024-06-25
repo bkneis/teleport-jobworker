@@ -19,11 +19,9 @@ func Test_tailReader(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-
 	// Create tail reader and read from checking contents
 	reader, err := newTailReader(TEST_FILE, 20*time.Millisecond)
 	defer reader.Close()
-
 	// Append some "testing n" to emulate a job logging to STDOUT
 	go func(r io.ReadCloser) {
 		// Close the tail reader once writing is done
@@ -34,7 +32,6 @@ func Test_tailReader(t *testing.T) {
 			panic(err)
 		}
 		defer f.Close()
-
 		// Append some logging output
 		for i := range 3 {
 			if _, err = f.WriteString(fmt.Sprintf("testing %d\n", i)); err != nil {
@@ -44,7 +41,6 @@ func Test_tailReader(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 		}
 	}(reader)
-
 	// Read the job's "output" written from the goroutine above
 	scanner := bufio.NewScanner(reader)
 	recievedLogs := ""
@@ -52,7 +48,6 @@ func Test_tailReader(t *testing.T) {
 		line := scanner.Text()
 		recievedLogs += line + "\n"
 	}
-
 	// Assert the logs are as expected
 	if EXPECTED_LOGS != recievedLogs {
 		t.Error("Logs read from tail reader was not the same as ones sent", EXPECTED_LOGS, recievedLogs)

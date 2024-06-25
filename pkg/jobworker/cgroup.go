@@ -49,7 +49,6 @@ func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
 	if err != nil {
 		return err
 	}
-
 	// This is where clone args and namespaces for user, PID and fs can be set
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		UseCgroupFD: true,
@@ -92,11 +91,6 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 	}
 	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOLatency)) // todo change to io.latency and use ms
 }
-
-// ProcsPath returns the file path to append the PID to add to a cgroup
-// func (cg *Cgroup) ProcsPath(name string) string {
-// 	return fmt.Sprintf("%s/cgroup.procs", cg.groupPath(name))
-// }
 
 // groupPath returns a given cgroup's directory path identified by name
 func (cg *Cgroup) groupPath(name string) string {
