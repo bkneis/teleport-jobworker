@@ -167,7 +167,7 @@ func main() {
     args := []string{"-c", `"while true; do echo hello; sleep 2; done"`}
 
     // Start the job
-    job, err := jobworker.New().Start(JobOpts{100, 100 * jobworker.CgroupMB, 50}, cmd, args)
+    job, err := jobworker.Start(JobOpts{100, 100 * jobworker.CgroupMB, 50}, cmd, args)
     if err != nil {
         log.Error(err)
         return

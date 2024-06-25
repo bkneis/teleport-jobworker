@@ -16,10 +16,11 @@ const (
 	CgroupGB            = CgroupMB * 1024
 )
 
-// job maintains the exec.Cmd struct (containing the underlying os.Process) and implements Job it
-// is returned to the caller with a successful call to Start and provides an API for interacting with the job
+// Job maintains the exec.Cmd struct (containing the underlying os.Process) and is returned
+// after a successful call to Start and provides an API for interacting with the job
 type Job struct {
 	cmd *exec.Cmd
+	con ResourceController
 }
 
 func (job *Job) Stop() error                    { return nil }
@@ -37,7 +38,6 @@ type JobOpts struct {
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
 type JobStatus struct {
 	ID       string
-	Owner    string
 	PID      int
 	Running  bool
 	ExitCode int
@@ -52,19 +52,10 @@ type ResourceController interface {
 	AddResourceControl(JobOpts) error
 }
 
-// JobWorker provides the Start function that returns a Job based on JobOpts and a command with arguments
-type JobWorker struct {
-	con ResourceController
-}
-
-// New returns an initialized JobWorker
-func New() *JobWorker {
-	return &JobWorker{}
-}
-
 // Start creates a cgroup, implements resource control and executes a Command with a go routine performing Wait to process the ExitCode
-func (worker *JobWorker) Start(opts JobOpts, name string, args ...string) (id Job, err error) {
-	return &job{}, nil
+func Start(opts JobOpts, name string, args ...string) (job *Job, err error) {
+	// setup exec.Cmd, call relevant resource controller functions etc.
+	return job, nil
 }
 
 // Example io.ReadCloser wrapper to tail logs from the os.File and sleep pollInterval before reading again for updates
