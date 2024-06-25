@@ -3,7 +3,6 @@ package jobworker
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"sync"
@@ -11,6 +10,19 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+)
+
+type CgroupByte int64
+
+func (b CgroupByte) String() string {
+	return fmt.Sprintf("%d", b)
+}
+
+// Base 2 byte units to parse / set JobOpts.MemLimit
+const (
+	CgroupKB CgroupByte = 1024
+	CgroupMB            = CgroupKB * 1024
+	CgroupGB            = CgroupMB * 1024
 )
 
 // Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner" for authz
@@ -25,9 +37,9 @@ type Job struct {
 // JobOpts wraps the options that can be passed to cgroups for the job
 // details at https://facebookmicrosites.github.io/cgroup2/docs/overview
 type JobOpts struct {
-	CpuWeight int // `cpu.weight`
-	MemLimit  int // `mem.high`
-	IOLatency int // `io.latency`
+	CpuWeight int32      // `cpu.weight`
+	IOLatency int32      // `io.latency`
+	MemLimit  CgroupByte // `mem.high`
 }
 
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
@@ -45,16 +57,7 @@ func (status JobStatus) String() string {
 		PID	 %d
 		Running	 %t
 		ExitCode %d
-	`, status.ID, status.PID, status.Running, status.ExitCode) // status.Owner,
-}
-
-// JobNotFound is an error returned when the job ID cannot be found
-type ErrNotFound struct {
-	id string
-}
-
-func (err *ErrNotFound) Error() string {
-	return fmt.Sprintf("could not find job with id %s", err.id)
+	`, status.ID, status.PID, status.Running, status.ExitCode)
 }
 
 // ResourceController defines the interface for implementing resource control of new processes
@@ -67,23 +70,25 @@ type ResourceController interface {
 }
 
 // NewOpts returns a configured JobOpts based on arguments
-func NewOpts(weight, memLimit, ioLatency int) JobOpts {
+func NewOpts(weight, ioLatency int32, memLimit CgroupByte) JobOpts {
 	return JobOpts{
 		CpuWeight: weight,
-		MemLimit:  memLimit,
 		IOLatency: ioLatency,
+		MemLimit:  memLimit,
 	}
 }
 
+// NewJob initialises a Job
 func NewJob(id string, cmd *exec.Cmd, con ResourceController) *Job {
 	return &Job{ID: id, running: true, cmd: cmd, con: con}
 }
 
+// Start calls start using the default ResourceController Cgroup
 func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	return start(&Cgroup{"/sys/fs/cgroup"}, opts, cmd, args...)
 }
 
-// Start creates a job's cgroup, add the resource controls from opts. It also creates a log file for the cgroup and
+// start creates a job's cgroup, add the resource controls from opts. It also creates a log file for the cgroup and
 // set's it to the exec.Cmd STDOUT and STDERR. Then it wraps the command executed for the job to add the PID to the cgroup
 // before running the actual job's command
 func start(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
@@ -94,31 +99,26 @@ func start(con ResourceController, opts JobOpts, cmd string, args ...string) (j 
 
 	// Create the cgroup and configure the controllers
 	if err = j.con.CreateGroup(id); err != nil {
-		log.Print("failed to create group")
 		return nil, err
 	}
 
 	// Update cgroup controllers to add resource control to process
 	if err = j.con.AddResourceControl(id, opts); err != nil {
-		log.Print("failed to add resource control")
 		return nil, err
 	}
 
 	// Add job's process to cgroup
 	if err = j.con.AddProcess(id, j.cmd); err != nil {
-		log.Print("failed to add process to cgroup")
 		return nil, err
 	}
 	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
 
 	// Don't inherit environment from parent
 	j.cmd.Env = []string{}
-	// todo should we use chroot and use working directory??
 
 	// Pipe STDOUT and STDERR to a log file
 	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		log.Print("could not create log file for job: ", err)
 		return nil, err
 	}
 	j.cmd.Stdout = f
@@ -127,7 +127,6 @@ func start(con ResourceController, opts JobOpts, cmd string, args ...string) (j 
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
-		log.Print("could not start job ", err)
 		return nil, err
 	}
 
@@ -198,13 +197,12 @@ func (job *Job) Status() (JobStatus, error) {
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
-// todo parameterize pollInterval
 func (job *Job) Output() (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), 500*time.Millisecond)
+	return newTailReader(logPath(job.ID), 500*time.Millisecond) // todo in production this would need to be parameterized or an env var
 }
 
 // logPath returns the file path for a job's log
-// In production this would need to be in a folder with resource isolation using the job's PID
+// todo in production this would need to be in a folder with resource isolation using the job's PID
 func logPath(id string) string {
 	return fmt.Sprintf("/tmp/%s.log", id)
 }

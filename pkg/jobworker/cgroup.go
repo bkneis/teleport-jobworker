@@ -9,7 +9,6 @@ import (
 )
 
 // Cgroup implements ResourceController and provides a minimal interface for the host's cgroup
-// todo do we need to check cgroup.controllers have three supported controllers??
 type Cgroup struct {
 	rootPath string
 }
@@ -88,7 +87,7 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 	if err = cg.updateController(name, "cpu.weight", fmt.Sprintf("%d", opts.CpuWeight)); err != nil {
 		return err
 	}
-	if err = cg.updateController(name, "memory.high", fmt.Sprintf("%dM", opts.MemLimit)); err != nil {
+	if err = cg.updateController(name, "memory.high", fmt.Sprintf("%d", opts.MemLimit)); err != nil {
 		return err
 	}
 	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOLatency)) // todo change to io.latency and use ms

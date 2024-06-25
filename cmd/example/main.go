@@ -23,7 +23,6 @@ func cleanup(id string, job *jobworker.Job) {
 	}
 }
 
-// todo move to examples folder in root and move pkg/jobworker to root
 func main() {
 
 	var err error
@@ -32,7 +31,7 @@ func main() {
 	// Define job's command and options
 	cmd := os.Args[1]
 	args := os.Args[2:]
-	opts := jobworker.NewOpts(100, 100, 50)
+	opts := jobworker.NewOpts(100, 50, 100*jobworker.CgroupMB)
 
 	// Run the job
 	job, err := jobworker.Start(opts, cmd, args...)

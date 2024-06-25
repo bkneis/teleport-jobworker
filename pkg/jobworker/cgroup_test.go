@@ -8,7 +8,7 @@ import (
 
 const TEST_NAME = "TEST"
 
-var TEST_OPTS = JobOpts{100, 100, 50}
+var TEST_OPTS = JobOpts{100, 50, 100 * CgroupMB}
 
 // exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
@@ -66,8 +66,9 @@ func TestCgroupController(t *testing.T) {
 		t.Errorf("could not read memory cgroup controller: %v", err)
 		return
 	}
-	if string(mem) != "100M" {
-		t.Errorf("memory high is incorrect: %v", err)
+	expectedMem := "104857600"
+	if string(mem) != expectedMem {
+		t.Errorf("memory high is incorrect: expected %s actual %s", expectedMem, string(mem))
 		return
 	}
 	// io
