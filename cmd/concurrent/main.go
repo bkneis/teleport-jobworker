@@ -79,14 +79,6 @@ func main() {
 		}(reader)
 	}
 
-	// time.Sleep(10 * time.Second)
-
-	// if err := job.Stop(); err != nil {
-	// 	fmt.Print(err)
-	// 	return
-	// }
-	// fmt.Printf("Stopped job %s\n", job.ID)
-
 	// Wait for Ctrl+C
 	wg.Wait()
 	os.Exit(1)
