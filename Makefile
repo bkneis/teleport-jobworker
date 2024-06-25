@@ -16,6 +16,10 @@ example_profiler:
 example_race:
 	$(VERBOSE) go build -race -v -o example_race ./cmd/example
 
+.PHONY: concurrent
+concurrent:
+	$(VERBOSE) go build -race -tags profiler -v -o example_concurrent ./cmd/concurrent
+
 .PHONY: proto
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/proto/worker.proto

@@ -41,7 +41,6 @@ func main() {
 			return
 		}
 		fmt.Printf("Stopped job %s\n", job.ID)
-
 	}(job, wg)
 
 	// Check the status
