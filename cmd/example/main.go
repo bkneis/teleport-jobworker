@@ -5,22 +5,21 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"os/user"
 	"syscall"
 
 	"github.com/teleport-jobworker/pkg/jobworker"
 )
 
 // cleanup is called after capturing Ctrl+C and used to delete the started job
-func cleanup(id string, worker *jobworker.JobWorker) {
-	if id != "" {
-		err := worker.Stop(id)
+func cleanup(id string, job *jobworker.Job) {
+	if job != nil {
+		err := job.Stop()
 		if err != nil {
 			log.Printf("could not stop job %s", id)
 			log.Fatal(err)
 			return
 		}
-		log.Printf("Stopped job %s", id)
+		log.Printf("Stopped job %s", job.ID)
 	}
 }
 
@@ -30,22 +29,13 @@ func main() {
 	var err error
 	var id string
 
-	worker := jobworker.New()
-
-	// Set current user as owner
-	user, err := user.Current()
-	if err != nil {
-		log.Print(err)
-		return
-	}
-
 	// Define job's command and options
 	cmd := os.Args[1]
 	args := os.Args[2:]
 	opts := jobworker.NewOpts(100, 100, 50)
 
 	// Run the job
-	id, err = worker.Start(opts, user.Name, cmd, args...)
+	job, err := jobworker.Start(opts, cmd, args...)
 	if err != nil {
 		log.Print("failed to start command")
 		log.Print(err)
@@ -55,13 +45,13 @@ func main() {
 	// Capture Ctrl+C and stop job if started
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(i string, w *jobworker.JobWorker) {
+	go func(i string, j *jobworker.Job) {
 		<-c
-		cleanup(i, w)
+		cleanup(i, j)
 		os.Exit(1)
-	}(id, worker)
+	}(id, job)
 
-	status, err := worker.Status(id)
+	status, err := job.Status()
 	if err != nil {
 		log.Print("failed to get status")
 		log.Print(err)
@@ -75,7 +65,7 @@ func main() {
 	}
 
 	// Get io.ReadCloser tailing job logs
-	reader, err := worker.Output(id)
+	reader, err := job.Output()
 	if err != nil {
 		log.Print("could not get reader for job's output")
 		return

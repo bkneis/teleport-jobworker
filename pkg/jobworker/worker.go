@@ -13,15 +13,13 @@ import (
 	"github.com/google/uuid"
 )
 
-// JobsList stores a map of the Job's containing the linux process key'd by job id (in memory DB)
-type JobsList map[string]*Job // todo maybe make this private and job or return it after Start
-
 // Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner" for authz
 type Job struct {
 	sync.RWMutex
+	ID      string
 	running bool
-	owner   string
 	cmd     *exec.Cmd
+	con     ResourceController
 }
 
 // JobOpts wraps the options that can be passed to cgroups for the job
@@ -35,7 +33,6 @@ type JobOpts struct {
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
 type JobStatus struct {
 	ID       string
-	Owner    string
 	PID      int
 	Running  bool
 	ExitCode int
@@ -45,11 +42,10 @@ func (status JobStatus) String() string {
 	return fmt.Sprintf(`
 		Job Status
 		ID	 %s
-		Owner	 %s
 		PID	 %d
 		Running	 %t
 		ExitCode %d
-	`, status.ID, status.Owner, status.PID, status.Running, status.ExitCode)
+	`, status.ID, status.PID, status.Running, status.ExitCode) // status.Owner,
 }
 
 // JobNotFound is an error returned when the job ID cannot be found
@@ -68,23 +64,6 @@ type ResourceController interface {
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(string, JobOpts) error
-	ProcsPath(string) string
-}
-
-// JobWorker implements Worker and will be initiated once by the binary starting the gRPC server
-// todo use logger member so disabling logs or debug level can be set
-type JobWorker struct {
-	sync.RWMutex
-	jobs JobsList
-	con  ResourceController
-}
-
-// New returns an initialized JobWorker with the cgroup resource controller
-func New() *JobWorker {
-	return &JobWorker{
-		jobs: JobsList{},
-		con:  &Cgroup{"/sys/fs/cgroup"},
-	}
 }
 
 // NewOpts returns a configured JobOpts based on arguments
@@ -96,98 +75,76 @@ func NewOpts(weight, memLimit, ioLatency int) JobOpts {
 	}
 }
 
+func NewJob(id string, cmd *exec.Cmd, con ResourceController) *Job {
+	return &Job{ID: id, running: true, cmd: cmd, con: con}
+}
+
+func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
+	return start(&Cgroup{"/sys/fs/cgroup"}, opts, cmd, args...)
+}
+
 // Start creates a job's cgroup, add the resource controls from opts. It also creates a log file for the cgroup and
 // set's it to the exec.Cmd STDOUT and STDERR. Then it wraps the command executed for the job to add the PID to the cgroup
 // before running the actual job's command
-func (worker *JobWorker) Start(opts JobOpts, owner, cmd string, args ...string) (id string, err error) {
-	id = uuid.New().String()
-
-	// Prefix the cmd and args with a command to add the PID to the cgroup
-	// jobCmd := "bash"
-	// testCmd := fmt.Sprintf("echo $$ >> %s; %s", worker.con.ProcsPath(id), cmd)
-	// // todo use string.Builder??
-	// for _, arg := range args {
-	// 	testCmd += fmt.Sprintf(" %s", arg)
-	// }
-	// args = []string{"-c", testCmd}
+func start(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
+	id := uuid.New().String()
 
 	// Create the job
-	job := Job{running: true, owner: owner, cmd: exec.Command(cmd, args...)}
+	j = NewJob(id, exec.Command(cmd, args...), con)
 
 	// Create the cgroup and configure the controllers
-	if err = worker.con.CreateGroup(id); err != nil {
+	if err = j.con.CreateGroup(id); err != nil {
 		log.Print("failed to create group")
-		return "", err
+		return nil, err
 	}
 
 	// Update cgroup controllers to add resource control to process
-	if err = worker.con.AddResourceControl(id, opts); err != nil {
+	if err = j.con.AddResourceControl(id, opts); err != nil {
 		log.Print("failed to add resource control")
-		return "", err
+		return nil, err
 	}
 
-	// // Add job's process to cgroup
-	// f, err := syscall.Open(fmt.Sprintf("/sys/fs/cgroup/%s", id), 0x200000, 0)
-	// if err != nil {
-	// 	log.Print("could not open procs file")
-	// 	return "", err
-	// }
-	// defer syscall.Close(f)
-
-	// // This is where clone args and namespaces for user, PID and fs can be set
-	// job.cmd.SysProcAttr = &syscall.SysProcAttr{
-	// 	UseCgroupFD: true,
-	// 	CgroupFD:    f,
-	// }
-	if err = worker.con.AddProcess(id, job.cmd); err != nil {
+	// Add job's process to cgroup
+	if err = j.con.AddProcess(id, j.cmd); err != nil {
 		log.Print("failed to add process to cgroup")
-		return "", err
+		return nil, err
 	}
-	defer syscall.Close(job.cmd.SysProcAttr.CgroupFD)
+	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
 
 	// Don't inherit environment from parent
-	job.cmd.Env = []string{}
-	// todo should we use chroot for working directory??
+	j.cmd.Env = []string{}
+	// todo should we use chroot and use working directory??
 
 	// Pipe STDOUT and STDERR to a log file
-	lf, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
+	f, err := os.OpenFile(logPath(id), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		log.Print("could not create log file for job: ", err)
-		return "", err
+		return nil, err
 	}
-	job.cmd.Stdout = lf
-	job.cmd.Stderr = lf
+	j.cmd.Stdout = f
+	j.cmd.Stderr = f
 
-	// Start the job and add it to our in memory database of jobs
-	worker.Lock()
-	worker.jobs[id] = &job
-	err = job.cmd.Start()
-	worker.Unlock()
+	// Start the job
+	err = j.cmd.Start()
 	if err != nil {
 		log.Print("could not start job ", err)
-		return "", err
+		return nil, err
 	}
 
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
-	go func(j *Job, logFile *os.File) {
-		j.cmd.Wait()
-		j.Lock()
-		j.running = false
-		j.Unlock()
+	go func(runningJob *Job, logFile *os.File) {
+		runningJob.cmd.Wait()
+		runningJob.Lock()
+		runningJob.running = false
+		runningJob.Unlock()
 		logFile.Close()
-	}(&job, lf)
+	}(j, f)
 
-	return id, nil
+	return j, nil
 }
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
-func (worker *JobWorker) Stop(id string) error {
-	worker.Lock()
-	defer worker.Unlock()
-	job, ok := worker.jobs[id]
-	if !ok {
-		return &ErrNotFound{id}
-	}
+func (job *Job) Stop() error {
 	// Request the process to terminate
 	if err := job.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return err
@@ -209,23 +166,16 @@ func (worker *JobWorker) Stop(id string) error {
 		}
 	}
 	// Clean up job logs
-	err := os.Remove(logPath(id))
+	err := os.Remove(logPath(job.ID))
 	if err != nil {
 		return err
 	}
 	// Delete job's cgroup
-	return worker.con.DeleteGroup(id)
+	return job.con.DeleteGroup(job.ID)
 }
 
 // Status generates a JobStatus with information from the job and it's underlying os.Process & os.ProcessState
-func (worker *JobWorker) Status(id string) (JobStatus, error) {
-	worker.RLock()
-	defer worker.RUnlock()
-	// Check the job exists
-	job, ok := worker.jobs[id]
-	if !ok {
-		return JobStatus{}, &ErrNotFound{id}
-	}
+func (job *Job) Status() (JobStatus, error) {
 	// Get PID and possible exit code from Process and ProcessState, assume running if ProcessState is nil
 	pid := 0
 	if job.cmd.Process != nil {
@@ -240,8 +190,7 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 		exitCode = job.cmd.ProcessState.ExitCode()
 	}
 	return JobStatus{
-		ID:       id,
-		Owner:    job.owner,
+		ID:       job.ID,
 		PID:      pid,
 		Running:  running,
 		ExitCode: exitCode,
@@ -250,8 +199,8 @@ func (worker *JobWorker) Status(id string) (JobStatus, error) {
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
 // todo parameterize pollInterval
-func (worker *JobWorker) Output(id string) (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(id), 500*time.Millisecond)
+func (job *Job) Output() (reader io.ReadCloser, err error) {
+	return newTailReader(logPath(job.ID), 500*time.Millisecond)
 }
 
 // logPath returns the file path for a job's log

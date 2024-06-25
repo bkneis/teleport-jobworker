@@ -2,7 +2,6 @@ package jobworker
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -49,7 +48,6 @@ func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
 	// Add job's process to cgroup
 	f, err := syscall.Open(cg.groupPath(name), 0x200000, 0)
 	if err != nil {
-		log.Print("could not open procs file")
 		return err
 	}
 
@@ -97,9 +95,9 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 }
 
 // ProcsPath returns the file path to append the PID to add to a cgroup
-func (cg *Cgroup) ProcsPath(name string) string {
-	return fmt.Sprintf("%s/cgroup.procs", cg.groupPath(name))
-}
+// func (cg *Cgroup) ProcsPath(name string) string {
+// 	return fmt.Sprintf("%s/cgroup.procs", cg.groupPath(name))
+// }
 
 // groupPath returns a given cgroup's directory path identified by name
 func (cg *Cgroup) groupPath(name string) string {

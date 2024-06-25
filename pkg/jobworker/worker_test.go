@@ -3,30 +3,38 @@ package jobworker
 import (
 	"bufio"
 	"fmt"
+	"os/exec"
+	"syscall"
 	"testing"
 	"time"
 )
 
-func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
-	worker := &JobWorker{
-		jobs: JobsList{},
-		con:  &Cgroup{"/tmp"},
-	}
+type mockController struct{}
 
+func (con *mockController) AddProcess(name string, cmd *exec.Cmd) error {
+	cmd.SysProcAttr = &syscall.SysProcAttr{CgroupFD: -1}
+	return nil
+}
+func (con *mockController) CreateGroup(name string) error                      { return nil }
+func (con *mockController) DeleteGroup(name string) error                      { return nil }
+func (con *mockController) AddResourceControl(name string, opts JobOpts) error { return nil }
+
+func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	n := 5
 	echo := "hello"
-	cmd := fmt.Sprintf("for run in {1..%d}; do echo %s; sleep 0.1; done", n, echo)
+	cmd := "bash"
+	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo %s; sleep 0.1; done", n, echo)}
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	id, err := worker.Start(opts, "TEST", cmd)
+	job, err := start(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
 	}
 
 	// Check the status and it's running
-	status, err := worker.Status(id)
+	status, err := job.Status()
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
@@ -38,7 +46,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	}
 
 	// Assert output
-	reader, err := worker.Output(id)
+	reader, err := job.Output()
 	if err != nil {
 		t.Error("could not get reader for job's output")
 		return
@@ -57,7 +65,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	}
 
 	// Stop the job
-	if err = worker.Stop(id); err != nil {
+	if err = job.Stop(); err != nil {
 		t.Error("failed to stop job : ", err)
 		return
 	}
@@ -65,7 +73,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err = worker.Status(id)
+	status, err = job.Status()
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
@@ -81,16 +89,12 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 }
 
 func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
-	worker := &JobWorker{
-		jobs: JobsList{},
-		con:  &Cgroup{"/tmp"},
-	}
-
-	cmd := "echo hello world"
+	cmd := "bash"
+	args := []string{"-c", "echo hello world"}
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	id, err := worker.Start(opts, "TEST", cmd)
+	job, err := start(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
@@ -99,7 +103,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err := worker.Status(id)
+	status, err := job.Status()
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
@@ -114,16 +118,12 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 }
 
 func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
-	worker := &JobWorker{
-		jobs: JobsList{},
-		con:  &Cgroup{"/tmp"},
-	}
-
-	cmd := "exit 4"
+	cmd := "bash"
+	args := []string{"-c", "exit 4"}
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	id, err := worker.Start(opts, "TEST", cmd)
+	job, err := start(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
@@ -132,7 +132,7 @@ func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err := worker.Status(id)
+	status, err := job.Status()
 	if err != nil {
 		t.Error("failed to get status of job: ", err)
 		return
