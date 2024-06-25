@@ -52,9 +52,9 @@ type JobStatus struct {
 
 func (status JobStatus) String() string {
 	return fmt.Sprintf(`Job Status
-	ID	     %s
-	PID	     %d
-	Running	 %t
+	ID	%s
+	PID	%d
+	Running	%t
 	ExitCode %d`, status.ID, status.PID, status.Running, status.ExitCode)
 }
 
@@ -94,15 +94,15 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	j = NewJob(uuid.New().String(), exec.Command(cmd, args...), con)
 	// Create the cgroup and configure the controllers
 	if err = j.con.CreateGroup(j.ID); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create cgroup: %w", err)
 	}
 	// Update cgroup controllers to add resource control to process
 	if err = j.con.AddResourceControl(j.ID, opts); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to add resource control: %w", err)
 	}
 	// Add job's process to cgroup
 	if err = j.con.AddProcess(j.ID, j.cmd); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to add PID to cgroup: %w", err)
 	}
 	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
 	// Don't inherit environment from parent
@@ -110,14 +110,14 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	// Pipe STDOUT and STDERR to a log file
 	f, err := os.OpenFile(logPath(j.ID), os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open job's log file: %w", err)
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to start job's exec.Cmd: %w", err)
 	}
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
 	go func(runningJob *Job, logFile *os.File) {
@@ -132,9 +132,14 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup
 func (job *Job) Stop() error {
+	// Regardless of signalling errors ensure we clean up the job's log file and cgroup
+	defer func() {
+		os.Remove(logPath(job.ID))
+		job.con.DeleteGroup(job.ID)
+	}()
 	// Request the process to terminate
 	if err := job.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return err
+		return fmt.Errorf("failed to send SIGTERM to job: %w", err)
 	}
 	// Poll the process with a signal 0 to check if it is running
 	running := true
@@ -149,16 +154,10 @@ func (job *Job) Stop() error {
 	// After 60 second grace period kill the process with SIGKILL if still running
 	if running {
 		if err := job.cmd.Process.Kill(); err != nil {
-			return err
+			return fmt.Errorf("failed to send SIGKILL job: %w", err)
 		}
 	}
-	// Clean up job logs
-	err := os.Remove(logPath(job.ID))
-	if err != nil {
-		return err
-	}
-	// Delete job's cgroup
-	return job.con.DeleteGroup(job.ID)
+	return nil
 }
 
 // Status generates a JobStatus with information from the job and it's underlying os.Process & os.ProcessState

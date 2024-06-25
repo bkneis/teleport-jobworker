@@ -11,22 +11,21 @@ import (
 )
 
 // cleanup is called after capturing Ctrl+C and used to delete the started job
-func cleanup(id string, job *jobworker.Job) {
+func cleanup(job *jobworker.Job) {
 	if job != nil {
 		err := job.Stop()
 		if err != nil {
-			fmt.Printf("could not stop job %s", id)
+			fmt.Printf("could not stop job %s\n", job.ID)
 			fmt.Print(err)
 			return
 		}
-		fmt.Printf("Stopped job %s", job.ID)
+		fmt.Printf("Stopped job %s\n", job.ID)
 	}
 }
 
 // Example usage: ./example bash -c "echo hello"
 func main() {
 	var err error
-	var id string
 	// Define job's command and options
 	cmd := os.Args[1]
 	args := os.Args[2:]
@@ -41,11 +40,11 @@ func main() {
 	// Capture Ctrl+C and stop job if started
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-	go func(i string, j *jobworker.Job) {
+	go func(j *jobworker.Job) {
 		<-c
-		cleanup(i, j)
+		cleanup(j)
 		os.Exit(1)
-	}(id, job)
+	}(job)
 	// Check the status
 	status, err := job.Status()
 	if err != nil {
