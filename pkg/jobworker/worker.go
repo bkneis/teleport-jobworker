@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 )
 
+// CgroupByte is used as a Byte to parse JobOpts.MemLimit cgroup value
 type CgroupByte int64
 
 func (b CgroupByte) String() string {
 	return fmt.Sprintf("%d", b)
 }
 
-// Base 2 byte units to parse / set JobOpts.MemLimit
 const (
 	CgroupKB CgroupByte = 1024
 	CgroupMB            = CgroupKB * 1024
@@ -85,13 +85,13 @@ func NewJob(id string, cmd *exec.Cmd, con ResourceController) *Job {
 
 // Start calls start using the default ResourceController Cgroup
 func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
-	return start(&Cgroup{"/sys/fs/cgroup"}, opts, cmd, args...)
+	return StartWithController(&Cgroup{"/sys/fs/cgroup"}, opts, cmd, args...)
 }
 
 // start creates a job's cgroup, add the resource controls from opts. It also creates a log file for the cgroup and
 // set's it to the exec.Cmd STDOUT and STDERR. Then it wraps the command executed for the job to add the PID to the cgroup
 // before running the actual job's command
-func start(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
+func StartWithController(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	id := uuid.New().String()
 
 	// Create the job
@@ -150,13 +150,13 @@ func (job *Job) Stop() error {
 	}
 	// Poll the process with a signal 0 to check if it is running
 	running := true
-	killTime := time.Now().Add(time.Minute)
+	killTime := time.Now().Add(time.Minute) // todo again in production would make configurable
 	for killTime.Unix() > time.Now().Unix() {
 		if err := job.cmd.Process.Signal(syscall.Signal(0)); err != nil {
 			running = false
 			break
 		}
-		time.Sleep(time.Second)
+		time.Sleep(time.Second) // todo again in production would make configurable
 	}
 	// After 60 second grace period kill the process with SIGKILL if still running
 	if running {
@@ -198,7 +198,7 @@ func (job *Job) Status() (JobStatus, error) {
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
 func (job *Job) Output() (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), 500*time.Millisecond) // todo in production this would need to be parameterized or an env var
+	return newTailReader(logPath(job.ID), 500*time.Millisecond) // todo again in production would make configurable
 }
 
 // logPath returns the file path for a job's log

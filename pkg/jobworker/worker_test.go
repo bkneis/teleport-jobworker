@@ -27,7 +27,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	job, err := start(&mockController{}, opts, cmd, args...)
+	job, err := StartWithController(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
@@ -94,7 +94,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	job, err := start(&mockController{}, opts, cmd, args...)
+	job, err := StartWithController(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
@@ -123,7 +123,7 @@ func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
 	opts := NewOpts(100, 100, 50)
 
 	// Run the job
-	job, err := start(&mockController{}, opts, cmd, args...)
+	job, err := StartWithController(&mockController{}, opts, cmd, args...)
 	if err != nil {
 		t.Error("failed to start job: ", err)
 		return
