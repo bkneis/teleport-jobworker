@@ -10,7 +10,7 @@ option java_outer_classname = "JobWorkerProto";
 
 // Start request containing linux command as a string and resource control options
 message StartRequest {
-    string name = 1;
+    string command = 1;
     repeated string args = 2;
     JobOpts opts = 3;
 }
@@ -33,7 +33,7 @@ message OutputRequest {
 message JobOpts {
     int32 cpu_weight = 1;
     string mem_limit = 2;
-    int32 io_latency = 3;
+    int32 io_weight = 3;
 }
 
 // Overall status of job, as returned by StatusResponse. I did not nest this message in StatusResponse since I think it could
