@@ -37,12 +37,12 @@ proto:
 # Run the library's unit tests
 .PHONY: test
 test:
-	$(VERBOSE) go test -v -coverprofile coverage.out ./pkg/jobworker/...
+	$(VERBOSE) go test -v -coverprofile coverage.out ./pkg/...
 
 # Run the library's unit tests with race detector
 .PHONY: race_test
 race_test:
-	$(VERBOSE) go test -race -v -coverprofile coverage.out ./pkg/jobworker/...
+	$(VERBOSE) go test -race -v -coverprofile coverage.out ./pkg/...
 
 # View the code coverage in a web browser
 .PHONY: coverage

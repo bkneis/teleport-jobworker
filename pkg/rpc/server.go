@@ -3,17 +3,20 @@ package rpc
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/teleport-jobworker/pkg/jobworker"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 )
 
+// ErrNotFound is returned when a job was not found using the UUID
 type ErrNotFound struct {
 	id string
 }
@@ -22,7 +25,8 @@ func (err ErrNotFound) Error() string {
 	return fmt.Sprintf("could not find job %s", err.id)
 }
 
-type JobsDB interface {
+// DB defines how to persist jobs across rpc requests, including ownership for authz
+type DB interface {
 	Get(string, string) *jobworker.Job
 	Update(string, *jobworker.Job)
 	Remove(string, string)
@@ -31,16 +35,51 @@ type JobsDB interface {
 // Server implements the grpc service Worker
 type Server struct {
 	pb.UnimplementedWorkerServer
-	db JobsDB
+	db DB
 }
 
-// NewServer returns an initialized Server with in memory DB of jobs
-func NewServer() *Server {
+// newServer returns an initialized Server with in memory DB of jobs
+func newServer(db DB) *Server {
 	return &Server{
-		db: &InMemoryJobsDB{jobs: map[string]jobList{}},
+		db: db,
 	}
 }
 
+// NewServer returns a grpc.Server set up with mtls
+func NewServer() *grpc.Server {
+	// todo fix file paths
+	cert, err := tls.LoadX509KeyPair("/home/arthur/go/src/github.com/teleport-jobworker/certs/server.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/server-key.pem")
+	if err != nil {
+		log.Fatalf("failed to load key pair: %s", err)
+	}
+
+	ca := x509.NewCertPool()
+	caFilePath := "/home/arthur/go/src/github.com/teleport-jobworker/certs/root.pem"
+	caBytes, err := os.ReadFile(caFilePath)
+	if err != nil {
+		log.Fatalf("failed to read ca cert %q: %v", caFilePath, err)
+	}
+	if ok := ca.AppendCertsFromPEM(caBytes); !ok {
+		log.Fatalf("failed to parse %q", caFilePath)
+	}
+
+	tlsConfig := &tls.Config{
+		ClientAuth:         tls.RequireAndVerifyClientCert,
+		Certificates:       []tls.Certificate{cert},
+		ClientCAs:          ca,
+		MinVersion:         tls.VersionTLS13,
+		InsecureSkipVerify: false,
+	}
+
+	db := &JobsDB{jobs: map[string]jobList{}}
+	m := Middleware{db}
+
+	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.UnaryInterceptor(m.Unary), grpc.StreamInterceptor(m.Stream))
+	pb.RegisterWorkerServer(s, newServer(db))
+	return s
+}
+
+// getOwner extracts the owner from a request's context metadata
 func getOwner(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -53,8 +92,6 @@ func getOwner(ctx context.Context) (string, error) {
 	if len(md["owner"]) < 1 {
 		return "", fmt.Errorf("could not find at least 1 owner")
 	}
-	fmt.Println("owner")
-	fmt.Println(owner[0])
 	return owner[0], nil
 }
 
@@ -127,70 +164,10 @@ func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) er
 	}
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
-		// line := scanner.Text()
 		err = stream.Send(&pb.Data{Bytes: scanner.Bytes()})
 		if err != nil {
 			return err
 		}
-		// fmt.Printf("%s\n", line)
 	}
 	return nil
-}
-
-// MiddlewareHandler performs authz by checking the job ID belongs to the owner (subject name)
-func MiddlewareHandler(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	if p, ok := peer.FromContext(ctx); ok {
-		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			for _, item := range mtls.State.PeerCertificates {
-				log.Println("client certificate subject: ", item.Subject.CommonName)
-
-				md, ok := metadata.FromIncomingContext(ctx)
-				if ok {
-					md.Append("owner", item.Subject.CommonName)
-				}
-				newCtx := metadata.NewIncomingContext(ctx, md)
-
-				// Allow any client after authentication to start a job
-				if info.FullMethod != "/JobWorker.Worker/Start" {
-					// TODO check client_id exists and owns the desired job, how to parse req?
-				}
-				return handler(newCtx, req)
-			}
-		}
-	}
-	return handler(ctx, req)
-}
-
-type wrappedStream struct {
-	grpc.ServerStream
-	ctx context.Context
-}
-
-func (w *wrappedStream) Context() context.Context {
-	return w.ctx
-}
-
-func newWrappedStream(s grpc.ServerStream, ctx context.Context) grpc.ServerStream {
-	return &wrappedStream{s, ctx}
-}
-
-// todo extract common logic from this and unary operator
-func StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	ctx := ss.Context()
-	if p, ok := peer.FromContext(ctx); ok {
-		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
-			for _, item := range mtls.State.PeerCertificates {
-				log.Println("client certificate subject: ", item.Subject.CommonName)
-
-				md, ok := metadata.FromIncomingContext(ctx)
-				if ok {
-					md.Append("owner", item.Subject.CommonName)
-				}
-				newCtx := metadata.NewIncomingContext(ctx, md)
-				// TODO check client_id exists and owns the desired job, how to parse req?
-				return handler(srv, newWrappedStream(ss, newCtx))
-			}
-		}
-	}
-	return handler(srv, ss)
 }
