@@ -1,6 +1,7 @@
 package rpc
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
@@ -8,11 +9,9 @@ import (
 	"github.com/teleport-jobworker/pkg/jobworker"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
 )
 
 type ErrNotFound struct {
@@ -45,14 +44,17 @@ func NewServer() *Server {
 func getOwner(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return "", fmt.Errorf("could not find owner")
+		return "", fmt.Errorf("could not get metadata from context")
 	}
 	owner, ok := md["owner"]
-	if ok {
-		if len(md["owner"]) < 1 {
-			return "", fmt.Errorf("could not find owner")
-		}
+	if !ok {
+		return "", fmt.Errorf("could not find owner")
 	}
+	if len(md["owner"]) < 1 {
+		return "", fmt.Errorf("could not find at least 1 owner")
+	}
+	fmt.Println("owner")
+	fmt.Println(owner[0])
 	return owner[0], nil
 }
 
@@ -110,7 +112,29 @@ func (s *Server) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusR
 }
 
 func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) error {
-	return status.Errorf(codes.Unimplemented, "method Output not implemented")
+	ctx := stream.Context()
+	owner, err := getOwner(ctx)
+	if err != nil {
+		return err
+	}
+	job := s.db.Get(owner, req.Id)
+	if job == nil {
+		return &ErrNotFound{req.Id}
+	}
+	reader, err := job.Output()
+	if err != nil {
+		return err
+	}
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		// line := scanner.Text()
+		err = stream.Send(&pb.Data{Bytes: scanner.Bytes()})
+		if err != nil {
+			return err
+		}
+		// fmt.Printf("%s\n", line)
+	}
+	return nil
 }
 
 // MiddlewareHandler performs authz by checking the job ID belongs to the owner (subject name)
@@ -135,4 +159,38 @@ func MiddlewareHandler(ctx context.Context, req interface{}, info *grpc.UnarySer
 		}
 	}
 	return handler(ctx, req)
+}
+
+type wrappedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (w *wrappedStream) Context() context.Context {
+	return w.ctx
+}
+
+func newWrappedStream(s grpc.ServerStream, ctx context.Context) grpc.ServerStream {
+	return &wrappedStream{s, ctx}
+}
+
+// todo extract common logic from this and unary operator
+func StreamInterceptor(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	ctx := ss.Context()
+	if p, ok := peer.FromContext(ctx); ok {
+		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {
+			for _, item := range mtls.State.PeerCertificates {
+				log.Println("client certificate subject: ", item.Subject.CommonName)
+
+				md, ok := metadata.FromIncomingContext(ctx)
+				if ok {
+					md.Append("owner", item.Subject.CommonName)
+				}
+				newCtx := metadata.NewIncomingContext(ctx, md)
+				// TODO check client_id exists and owns the desired job, how to parse req?
+				return handler(srv, newWrappedStream(ss, newCtx))
+			}
+		}
+	}
+	return handler(srv, ss)
 }
