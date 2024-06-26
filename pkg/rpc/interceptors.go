@@ -15,6 +15,7 @@ type Middleware struct {
 	db DB
 }
 
+// addOwnerMetadata extracts the common name from the tls context and appends it to the grpc's context metadata
 func (m *Middleware) addOwnerMetadata(ctx context.Context) (string, context.Context) {
 	if p, ok := peer.FromContext(ctx); ok {
 		if mtls, ok := p.AuthInfo.(credentials.TLSInfo); ok {

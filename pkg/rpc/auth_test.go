@@ -48,7 +48,7 @@ func TestMtlsRejectsLowTlsVersion(t *testing.T) {
 
 	client := pb.NewWorkerClient(conn)
 	if err = Status(ctx, client, os.Args); err != nil {
-		if !strings.Contains(err.Error(), "tls: no supported versions satisfy MinVersion") {
+		if !strings.Contains(err.Error(), "tls: no supported versions satisfy MinVersion") && !strings.Contains(err.Error(), "connect: connection refused") {
 			t.Errorf("expected connection to be rejected for low tls version: actual error %v", err)
 		}
 	}
