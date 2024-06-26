@@ -160,7 +160,6 @@ echo "100M" > memory.high
 echo "100" > cpu.weight
 echo "default 100" > io.weight
 ```
-todo use io.latency
 
 Add process ID
 

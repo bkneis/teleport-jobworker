@@ -53,7 +53,7 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 	if err = cg.updateController(name, "memory.high", fmt.Sprintf("%d", opts.MemLimit)); err != nil {
 		return err
 	}
-	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOLatency)) // todo change to io.latency and use ms
+	return cg.updateController(name, "io.weight", fmt.Sprintf("%d", opts.IOWeight))
 }
 
 // groupPath returns a given cgroup's directory path identified by name
