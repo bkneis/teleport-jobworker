@@ -61,7 +61,90 @@ Then use something like `pkill -f example` in order to send the SIGTERM to examp
 
 ## Testing cgroups v2
 
+TODO In production and with more time automating some of these tests in a set of integration test would be ideal. Running in a sandbox with a known amount of compute resources a series of automated integration tests could run something similar to the example, where stress is executed then the CPU, memory and IO pressure interface files are inspected and values validated.
+
+For now I have manually tested the library with cgroups with stress and inspected the pressure files to ensure the `some` and `full` metric show appropriate amounts of wall time.
+
+### Using the golang library / example
+
+```
+./example bash -c "stress --cpu 2" &
+
+./example bash -c "stress --io 2 --vm 2" &
+
+./example bash -c "dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock" &
+```
+
+Check the cgroup PSI files using the Job UUIDs and stop the tests
+
+```
+cat /sys/fs/cgroup/{job_uuid}/cpu.pressure
+cat /sys/fs/cgroup/{job_uuid}/io.pressure
+cat /sys/fs/cgroup/{job_uuid}/memory.pressure
+
+pkill -f example
+```
+
+### Test results on dev machine
+
+Below are some example outputs running on my machine (AMD 8 core, 14GB RAM, Ubuntu 20, 5.15.0-107-generic, x86_64 GNU/Linux)
+
+Example output for CPU
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --cpu 8" &
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --cpu 8" &
+
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/d63e10b8-2059-48fb-9ae2-6c9bd9e521f8/cpu.pressure
+some avg10=50.08 avg60=17.03 avg300=4.03 total=12994035
+full avg10=32.21 avg60=10.96 avg300=2.59 total=8284627
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/ff30ad27-4dd9-4187-85ef-a8221ecb536d/cpu.pressure
+some avg10=50.63 avg60=17.95 avg300=4.30 total=14289995
+full avg10=31.15 avg60=11.40 avg300=2.74 total=9041617
+
+➜  teleport-jobworker git:(feature/v1) ✗ pkill -f example
+```
+
+Example output for IO
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --io 2 --vm 2"
+Job Status
+	ID	     ca7181f4-7c76-4850-b48c-f66b4e35f9e2
+	PID	     1138790
+	Running	 true
+	ExitCode 0
+Job's logs
+
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/ca7181f4-7c76-4850-b48c-f66b4e35f9e2/io.pressure 
+some avg10=19.65 avg60=7.25 avg300=1.75 total=5697270
+full avg10=17.97 avg60=6.70 avg300=1.62 total=5252884
+```
+
+Example output for memory
+
+```
+➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "dd if=/dev/urandom of=/dev/shm/sample9.txt bs=1G count=2 iflag=fullblock"
+Job Status
+	ID	     0564cfd1-3224-43f4-ac38-efbe755f0c91
+	PID	     1149656
+	Running	 true
+	ExitCode 0
+Job's logs
+2+0 records in
+2+0 records out
+2147483648 bytes (2.1 GB, 2.0 GiB) copied, 23.8283 s, 90.1 MB/s
+
+➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/0564cfd1-3224-43f4-ac38-efbe755f0c91/memory.pressure 
+some avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
+full avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
+```
+
+
 ### Using the host
+
+To validate the host's cgroup file and ensure the golang library doesn't act completely different, here are some instructions how to validate cgroups v2 and resource control using just the host. This can be used to verify the golang client or ensure the host is working.
+
 Install stress tool
 
 `apt install stress`
@@ -111,98 +194,23 @@ Kill memory test
 
 `pkill -f "dd if=/dev/urandom"`
 
-### Using the golang library / example
+### Testing Job's linux process model
 
-You should then be able to do the same using the golang library
-
-```
-./example bash -c "stress --cpu 2" &
-
-./example bash -c "stress --io 2 --vm 2" &
-
-./example bash -c "dd if=/dev/urandom of=/dev/shm/sample.txt bs=1G count=2 iflag=fullblock" &
-```
-
-Check the cgroup PSI files using the Job UUIDs and stop the tests
+Below is an example output highlighting the process hierarchy of a Job. Starting a job that spawns child processes, we use `ps` to ensure the correct PPID / PGID is set so that when we stop the Job all child processes are also terminated.
 
 ```
-cat /sys/fs/cgroup/{job_uuid}/cpu.pressure
-cat /sys/fs/cgroup/{job_uuid}/io.pressure
-cat /sys/fs/cgroup/{job_uuid}/memory.pressure
-
-pkill -f example
-```
-
-### Testing results on dev machine
-
-Below are some example outputs running on my machine
-
-```
-➜  teleport-jobworker git:(feature/v1) ✗ uname -a
-Linux marvin 5.15.0-107-generic #117~20.04.1-Ubuntu SMP Tue Apr 30 10:35:57 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
-➜  teleport-jobworker git:(feature/v1) ✗ lscpu
-CPU(s):                             8
-Thread(s) per core:                 2
-Core(s) per socket:                 4
-Socket(s):                          1
-Model name:                         AMD Ryzen 7 PRO 3700U w/ Radeon Vega Mobile Gfx
-...
-➜  teleport-jobworker git:(feature/v1) ✗ lsmem 
-RANGE                                 SIZE  STATE REMOVABLE  BLOCK
-...
-Total online memory:      14G
-```
-
-Example output for CPU
-
-```
-➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --cpu 8" &
-[1] 1128960
-Job Status                                                                                                                                                                                     
-	ID	     09934f7f-112e-46c0-9b2f-39c32ac015d8
-	PID	     1128975
-	Running	 true
-	ExitCode 0
-Job's logs
-
-➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/09934f7f-112e-46c0-9b2f-39c32ac015d8/cpu.pressure 
-some avg10=0.73 avg60=0.25 avg300=0.05 total=302563
-full avg10=0.73 avg60=0.25 avg300=0.05 total=283476
-
-➜  teleport-jobworker git:(feature/v1) ✗ pkill -f example
-```
-
-Example output for IO
-
-```
-➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "stress -q --io 2 --vm 2"
-Job Status
-	ID	     ca7181f4-7c76-4850-b48c-f66b4e35f9e2
-	PID	     1138790
-	Running	 true
-	ExitCode 0
-Job's logs
-
-➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/ca7181f4-7c76-4850-b48c-f66b4e35f9e2/io.pressure 
-some avg10=19.65 avg60=7.25 avg300=1.75 total=5697270
-full avg10=17.97 avg60=6.70 avg300=1.62 total=5252884
-```
-
-Example output for memory
-
-```
-➜  teleport-jobworker git:(feature/v1) ✗ ./example bash -c "dd if=/dev/urandom of=/dev/shm/sample9.txt bs=1G count=2 iflag=fullblock"
-Job Status
-	ID	     0564cfd1-3224-43f4-ac38-efbe755f0c91
-	PID	     1149656
-	Running	 true
-	ExitCode 0
-Job's logs
-2+0 records in
-2+0 records out
-2147483648 bytes (2.1 GB, 2.0 GiB) copied, 23.8283 s, 90.1 MB/s
-
-➜  teleport-jobworker git:(feature/v1) ✗ cat /sys/fs/cgroup/0564cfd1-3224-43f4-ac38-efbe755f0c91/memory.pressure 
-some avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
-full avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
+➜  teleport-jobworker git:(feature/v1) ✗ ./example_debug bash -c stress --cpu 4 &
+➜  teleport-jobworker git:(feature/v1) ✗ ps aux | grep stress
+root     1724230  0.1  0.1 2138436 23248 pts/1   Sl+  08:50   0:00 ./example_debug bash -c stress --cpu 4
+root     1724256  0.0  0.0   3864   956 pts/1    S+   08:50   0:00 stress --cpu 4
+root     1724264  101  0.0   3864   100 pts/1    R+   08:50   0:18 stress --cpu 4
+root     1724265  101  0.0   3864   100 pts/1    R+   08:50   0:18 stress --cpu 4
+root     1724266  101  0.0   3864   100 pts/1    R+   08:50   0:18 stress --cpu 4
+root     1724267  101  0.0   3864   100 pts/1    R+   08:50   0:18 stress --cpu 4
+arthur   1724614  0.0  0.0   9044  2564 pts/0    S+   08:51   0:00 grep --color=auto --exclude-dir=.bzr --exclude-dir=CVS --exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn --exclude-dir=.idea --exclude-dir=.tox stress
+➜  teleport-jobworker git:(feature/v1) ✗ ps -f 1724256
+UID          PID    PPID  C STIME TTY      STAT   TIME CMD
+root     1724256 1724230  0 08:50 pts/1    S+     0:00 stress --cpu 4
+➜  teleport-jobworker git:(feature/v1) ✗ ps -o pgid= 1724256     
+1733700
 ```
