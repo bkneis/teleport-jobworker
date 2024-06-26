@@ -23,6 +23,12 @@ func (err ErrNotFound) Error() string {
 	return fmt.Sprintf("could not find job %s", err.id)
 }
 
+type JobsDB interface {
+	Get(string, string) *jobworker.Job
+	Update(string, *jobworker.Job)
+	Remove(string, string)
+}
+
 // Server implements the grpc service Worker
 type Server struct {
 	pb.UnimplementedWorkerServer
@@ -32,7 +38,7 @@ type Server struct {
 // NewServer returns an initialized Server with in memory DB of jobs
 func NewServer() *Server {
 	return &Server{
-		db: JobsDB{jobs: map[string]jobList{}},
+		db: &InMemoryJobsDB{jobs: map[string]jobList{}},
 	}
 }
 
