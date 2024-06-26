@@ -28,6 +28,10 @@ message OutputRequest {
     string id = 1;
 }
 
+message GenericRequest {
+    string id = 1;
+}
+
 // Options for cgroup v2 controllers, see doc.go for example interfaces
 message JobOpts {
     int32 cpu_weight = 1;
