@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// mockController implements ResourceController but stubs out the implementation so the file system
+// is not manipulated for unit tests
 type mockController struct{}
 
 func (con *mockController) AddProcess(name string, cmd *exec.Cmd) error {
