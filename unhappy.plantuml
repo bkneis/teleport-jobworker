@@ -1,0 +1,23 @@
+@startuml
+client -> server: StartRequest
+activate server
+server -> cgroup: Create
+server <-- cgroup: 
+server -> cgroup: Define resource control
+server <-- cgroup:
+server -> process: Start
+process -> cgroup: Add PID
+process <-- cgroup:
+process -> command: Run
+process --> server:
+client <-- server: StartResponse
+deactivate server
+process <-- command: ReturnCode
+
+client -> server: StatusRequest
+activate server
+server -> process:
+process --> server: Status
+client <- server: StatusResponse
+
+@enduml

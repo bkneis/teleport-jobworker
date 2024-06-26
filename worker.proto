@@ -1,0 +1,78 @@
+// proto file to define the request / response messages and gRPC service for job worker
+syntax = "proto3";
+
+package JobWorker;
+
+option go_package = "github.com/bkneis/jobworker";
+option java_multiple_files = true;
+option java_package = "com.teleport.jobworker";
+option java_outer_classname = "JobWorkerProto";
+
+// Start request containing linux command as a string and resource control options
+message StartRequest {
+    string name = 1;
+    repeated string args = 2;
+    JobOpts opts = 3;
+}
+
+// All other requests just have job UUID. I did not make these generic as per protobuf best practices
+message StopRequest {
+    string id = 1;
+}
+
+message StatusRequest {
+    string id = 1;
+}
+
+message OutputRequest {
+    string id = 1;
+}
+
+// Options for cgroup v2 controllers, see doc.go for example interfaces
+message JobOpts {
+    int32 cpu_weight = 1;
+    string mem_limit = 2;
+    int32 io_latency = 3;
+}
+
+// Overall status of job, as returned by StatusResponse. I did not nest this message in StatusResponse since I think it could
+// be references by other messages in the future
+message JobStatus {
+    string id = 1;
+    string owner = 2;
+    int64 pid = 3;
+    bool running = 4;
+    int32 exitCode = 5;
+}
+
+// Returns job UUID as id to be used for subsequent requests like status, stream, stop and possible error status
+message StartResponse {
+    string id = 1;
+    Status status = 2;
+}
+
+message StopResponse {
+    Status status = 1;
+}
+
+message StatusResponse {
+    JobStatus job_status = 1;
+    Status status = 2;
+}
+
+// Utility message to stream logs as bytes
+message Data { bytes bytes = 1; }
+
+// I would typically use googleapis.grpc.Status but since no dependencies were to be introduced and teleport might have it's own
+// custom error handling to wrap the underlying error status I will keep it simple
+message Status {
+    int32 code = 1;
+    string message = 2;
+}
+
+service Worker{
+    rpc Start(StartRequest) returns (StartResponse) {};
+    rpc Stop(StopRequest) returns (StopResponse) {};
+    rpc Status(StatusRequest) returns (StatusResponse) {};
+    rpc Output(OutputRequest) returns (stream Data) {};
+}

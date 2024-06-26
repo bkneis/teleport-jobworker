@@ -1,0 +1,49 @@
+@startuml
+client -> server: StartRequest
+activate server
+server -> cgroup: Create cgroup
+server <-- cgroup: 
+server -> cgroup: Define resource control
+server <-- cgroup:
+server -> process: Start
+process -> cgroup: Add PID
+process <-- cgroup:
+process -> command: Run
+process --> server:
+client <-- server: StartResponse
+deactivate server
+
+client -> server: StatusRequest
+activate server
+server -> process: 
+server <-- process: Status
+client <-- server: StatusResponse
+deactivate server
+
+client -> server: OutputRequest
+activate server
+process -> server: Logs
+process -> server: Logs
+process -> server: ...
+server --> client: Log Stream
+client -> server: Cancel
+server --> client:
+deactivate server
+
+client -> server: StopRequest
+activate server
+server -> process: SIGTERM
+server <-- process:
+loop for 60 seconds or until signal 0 fails
+    server -> process: Signal 0
+    process --> server:
+end
+alt command didnt terminate
+    server -> process: SIGKILL
+end
+server -> cgroup: Delete Group
+cgroup --> server: 
+client <-- server: StopResponse
+deactivate server
+
+@enduml
