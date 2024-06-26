@@ -3,11 +3,11 @@ jobworker is a simple golang library that executes arbitrary linux processes wit
 
 The golang library uses the host file system to manage cgroups, where directory and files are created / delete in the cgroup root dir `/sys/fs/cgroup`.
 
-Executing the linux command is executed using `exec.Cmd` where the Cmd is wrapped in a Job struct that provides an API for managing the process.
+Executing the linux command is done with `exec.Cmd` where the Cmd is wrapped in a Job struct that provides an API for managing the process.
 
-This repo also contains a simple example of how to use the library. This is not the gRPC client and CLI, just an example usage of the golang library.
+This repo also contains a simple example of how to use the library. This is not the gRPC client and CLI, just an example usage of the golang library, as well as a example showing support for concurrent readers.
 
-The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups has correctly performed a request. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created. Such as stat'ing a file like cgroup.controllers or ensuring it has the supported controllers.
+The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups are correctly working. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created.
 
 ## How to
 
@@ -19,11 +19,11 @@ or with the race detector and profiler enabled
 
 `make example_debug`
 
-Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates N clients tailing the logs of one job, where N is the first argument of the binary.
+Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates N clients tailing the logs of one job, where N is the first argument of the binary. There should be 1 go routine for each reader and 1 for the job.
 
 ```
 make concurrent
-./concurrent 100 bash -c "while true; do echo hello; sleep 0.2; done"
+./concurrent 10 bash -c "while true; do echo hello; sleep 1; done"
 google-chrome http://localhost:6060/debug/pprof/
 ```
 
@@ -61,11 +61,11 @@ Then use something like `pkill -f example` in order to send the SIGTERM to examp
 
 ## Testing cgroups v2
 
-TODO In production and with more time automating some of these tests in a set of integration test would be ideal. Running in a sandbox with a known amount of compute resources a series of automated integration tests could run something similar to the example, where stress is executed then the CPU, memory and IO pressure interface files are inspected and values validated.
+TODO In production and with more time automating some of these tests as a set of integration test would be ideal. Running in a sandbox server with known amounts of compute resources, a series of automated integration tests could run something similar to the example, where stress is executed then the CPU, memory and IO pressure interface file values are validated.
 
-For now I have manually tested the library with cgroups with stress and inspected the pressure files to ensure the `some` and `full` metric show appropriate amounts of wall time.
+For now I have manually tested the library with cgroups using stress and inspected the pressure files to ensure the `some` and `full` metric show appropriate amounts of wall time.
 
-### Using the golang library / example
+### How to test cgroups using golang library / example
 
 ```
 ./example bash -c "stress --cpu 2" &
@@ -105,6 +105,8 @@ full avg10=31.15 avg60=11.40 avg300=2.74 total=9041617
 ➜  teleport-jobworker git:(feature/v1) ✗ pkill -f example
 ```
 
+Note that the wall time is around 50%, since both jobs try to use 100% of the CPU, they block each other.
+
 Example output for IO
 
 ```
@@ -139,7 +141,6 @@ Job's logs
 some avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
 full avg10=55.73 avg60=15.45 avg300=3.50 total=11451326
 ```
-
 
 ### Using the host
 
@@ -211,5 +212,5 @@ arthur   1724614  0.0  0.0   9044  2564 pts/0    S+   08:51   0:00 grep --color=
 UID          PID    PPID  C STIME TTY      STAT   TIME CMD
 root     1724256 1724230  0 08:50 pts/1    S+     0:00 stress --cpu 4
 ➜  teleport-jobworker git:(feature/v1) ✗ ps -o pgid= 1724256     
-1733700
+1723700
 ```
