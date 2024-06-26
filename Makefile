@@ -21,6 +21,11 @@ server:
 	$(VERBOSE) go build -v -o server ./cmd/server
 
 # Build the go application natively
+.PHONY: server_debug
+server_debug:
+	$(VERBOSE) go build -race -tags profiler -v -o server_debug ./cmd/server
+
+# Build the go application natively
 .PHONY: client
 client:
 	$(VERBOSE) go build -v -o client ./cmd/client
