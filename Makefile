@@ -39,6 +39,11 @@ proto:
 test:
 	$(VERBOSE) go test -v -coverprofile coverage.out ./pkg/...
 
+# Run the library's unit tests
+.PHONY: integration_test
+integration_test:
+	$(VERBOSE) go test -tags integration_tests -v -coverprofile coverage.out ./pkg/...
+
 # Run the library's unit tests with race detector
 .PHONY: race_test
 race_test:
