@@ -20,6 +20,12 @@ func (b CgroupByte) String() string {
 	return fmt.Sprintf("%d", b)
 }
 
+// ParseCgroupByte returns a CgroupByte value based on a string
+// TODO implement
+func ParseCgroupByte(memLimit string) CgroupByte {
+	return 50 * CgroupMB
+}
+
 const (
 	CgroupKB CgroupByte = 1024
 	CgroupMB            = CgroupKB * 1024
