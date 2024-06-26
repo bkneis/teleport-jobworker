@@ -15,6 +15,16 @@ example_debug:
 concurrent:
 	$(VERBOSE) go build -race -tags profiler -v -o example_concurrent ./cmd/concurrent
 
+# Build the go application natively
+.PHONY: server
+server:
+	$(VERBOSE) go build -v -o server ./cmd/server
+
+# Build the go application natively
+.PHONY: client
+client:
+	$(VERBOSE) go build -v -o client ./cmd/client
+
 .PHONY: proto
 proto:
 	protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative pkg/proto/worker.proto
