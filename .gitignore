@@ -26,5 +26,5 @@ cover.out
 
 # binaries
 example
-example_profiler
-example_race
+example_debug
+example_concurrent

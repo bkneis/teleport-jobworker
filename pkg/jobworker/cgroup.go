@@ -12,36 +12,6 @@ type Cgroup struct {
 	rootPath string
 }
 
-// ErrControllerNotSupported is returned if the cgroup v2 controller is not supported on the host
-type ErrControllerNotSupported struct {
-	rootPath   string
-	controller string
-}
-
-func (err ErrControllerNotSupported) Error() string {
-	return fmt.Sprintf("cgroup v2 controller %s not available in %s/cgroup.controllers", err.controller, err.rootPath)
-}
-
-// Are these sanity checks needed??
-// NewCgroup returns an initialized Cgroup and checks for controller compatibility on the host
-// func NewCgroup(rootPath string) (cg *Cgroup, err error) {
-// 	cg = &Cgroup{rootPath}
-// 	var subtree []byte
-// 	if subtree, err = os.ReadFile(fmt.Sprintf("%s/cgroup.controllers", cg.rootPath)); err != nil {
-// 		return nil, err
-// 	}
-// 	if strings.Contains(string(subtree), "cpu") {
-// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-// 	}
-// 	if strings.Contains(string(subtree), "memory") {
-// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-// 	}
-// 	if strings.Contains(string(subtree), "io") {
-// 		return nil, &ErrControllerNotSupported{rootPath, "cpu"}
-// 	}
-// 	return cg, nil
-// }
-
 // AddProcess mutates the given cmd to instruct go to add the PID of the started process to a given cgroup
 func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
 	// Add job's process to cgroup
@@ -58,19 +28,13 @@ func (cg *Cgroup) AddProcess(name string, cmd *exec.Cmd) error {
 }
 
 // CreateGroup creates a directory in the cgroup root path to signal cgroup to create a group
+// TODO in production we could check here the cgroup was created correctly, such as checking cgroup.controllers file for supported controllers
 func (cg *Cgroup) CreateGroup(name string) (err error) {
-	groupPath := cg.groupPath(name)
-	if err := os.Mkdir(groupPath, 0755); err != nil {
-		return err
-	}
-	// Are these sanity checks needed??
-	// check cgroup populated directory
-	// _, err = os.Stat(fmt.Sprintf("%s/cgroup.controllers", groupPath))
-	return err
+	return os.Mkdir(cg.groupPath(name), 0755)
 }
 
 // DeleteGroup deletes a cgroup's directory signalling cgroup to delete the group
-// first maybe check cgroup.events https://docs.kernel.org/admin-guide/cgroup-v2.html#basic-operations
+// TODO in production before deleting a group we could check cgroup.events to ensure no processes are still running in thr cgroup
 func (cg *Cgroup) DeleteGroup(name string) error {
 	return os.RemoveAll(cg.groupPath(name))
 }

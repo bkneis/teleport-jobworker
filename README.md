@@ -19,11 +19,11 @@ or with the race detector and profiler enabled
 
 `make example_debug`
 
-Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates 100 clients tailing the logs of one job.
+Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates N clients tailing the logs of one job, where N is the first argument of the binary.
 
 ```
 make concurrent
-./concurrent bash -c "while true; do echo hello; sleep 0.2; done"
+./concurrent 100 bash -c "while true; do echo hello; sleep 0.2; done"
 google-chrome http://localhost:6060/debug/pprof/
 ```
 

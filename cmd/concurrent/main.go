@@ -6,25 +6,24 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 
 	"github.com/teleport-jobworker/pkg/jobworker"
 )
 
-var NUM_CLIENTS = 100
-
-// Example usage: ./example_concurrent bash -c "while true; do echo hello; sleep 0.2; done"
+// Example usage: ./example_concurrent NUM_CLIENTS bash -c "while true; do echo hello; sleep 0.2; done"
 func main() {
 	var err error
-	if len(os.Args) < 2 {
-		fmt.Print(`Not enough arguments, usage: ./example bash -c "echo hello"`)
+	if len(os.Args) < 3 {
+		fmt.Print(`Not enough arguments, usage: ./example_concurrent 20 bash -c "echo hello"`)
 		return
 	}
 	// Define job's command and options
 	opts := jobworker.NewOpts(100, 50, 100*jobworker.CgroupMB)
 	// Run the job
-	job, err := jobworker.Start(opts, os.Args[1], os.Args[2:]...)
+	job, err := jobworker.Start(opts, os.Args[2], os.Args[3:]...)
 	if err != nil {
 		fmt.Print("failed to start command")
 		fmt.Print(err)
@@ -60,7 +59,13 @@ func main() {
 		return
 	}
 
-	for _ = range NUM_CLIENTS {
+	numClients, err := strconv.Atoi(os.Args[1])
+	if err != nil {
+		fmt.Print("example provided invalid number")
+		return
+	}
+
+	for _ = range numClients {
 		// Get io.ReadCloser tailing job logs
 		reader, err := job.Output()
 		if err != nil {
