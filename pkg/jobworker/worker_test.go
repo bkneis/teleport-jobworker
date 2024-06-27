@@ -36,12 +36,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	}
 
 	// Check the status and it's running
-	status, err := job.Status()
-	if err != nil {
-		t.Error("failed to get status of job: ", err)
-		return
-	}
-
+	status := job.Status()
 	if !status.Running {
 		t.Error("expected job to be running and it isn't : ", err)
 		return
@@ -75,11 +70,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err = job.Status()
-	if err != nil {
-		t.Error("failed to get status of job: ", err)
-		return
-	}
+	status = job.Status()
 	if status.Running {
 		t.Error("expected job not to be running and it is")
 		return
@@ -105,11 +96,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err := job.Status()
-	if err != nil {
-		t.Error("failed to get status of job: ", err)
-		return
-	}
+	status := job.Status()
 	if status.Running {
 		t.Error("expected job not to be running and it is")
 		return
@@ -134,11 +121,7 @@ func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Assert the job is not running
-	status, err := job.Status()
-	if err != nil {
-		t.Error("failed to get status of job: ", err)
-		return
-	}
+	status := job.Status()
 	if status.Running {
 		t.Error("expected job not to be running and it is")
 		return

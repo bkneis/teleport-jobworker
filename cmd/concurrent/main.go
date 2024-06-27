@@ -46,12 +46,7 @@ func main() {
 	}(job, wg)
 
 	// Check the status
-	status, err := job.Status()
-	if err != nil {
-		fmt.Print("failed to get status")
-		fmt.Print(err)
-		return
-	}
+	status := job.Status()
 	// Check it's running
 	fmt.Println(status)
 	if !status.Running {

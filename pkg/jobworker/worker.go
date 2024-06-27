@@ -86,9 +86,9 @@ func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	return StartWithController(&Cgroup{"/sys/fs/cgroup"}, opts, cmd, args...)
 }
 
-// start creates a job's cgroup, add the resource controls from opts. It also creates a log file for the cgroup and
-// set's it to the exec.Cmd STDOUT and STDERR. Then it wraps the command executed for the job to add the PID to the cgroup
-// before running the actual job's command
+// StartWithController creates a job's cgroup, adds the resource controls from opts, creates a log file for the cgroup and
+// set's it to the exec.Cmd STDOUT and STDERR. Finally we Start the exec.Cmd and start a go routine to handle the blocking
+// call to Wait so that we can update the job's running flag.
 func StartWithController(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	// Create the job
 	j = NewJob(uuid.New().String(), exec.Command(cmd, args...), con)
@@ -114,6 +114,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
+	// Run the command as a given user as not to escalate privilege, since the executing user must also manage cgroups
 	j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: WORKER_UID, Gid: WORKER_GUID}
 	// Start the job
 	err = j.cmd.Start()
@@ -129,7 +130,8 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	return j, nil
 }
 
-// Stop request a job's termination using SIGTERM and deletes it's cgroup
+// Stop request a job's termination using SIGTERM and deletes it's cgroup. If the SIGTERM is ignored, we send
+// a SIGKILL after STOP_GRACE_PERIOD.
 func (job *Job) Stop() error {
 	// Regardless of signalling errors, ensure we clean up the job's log file and cgroup
 	defer func() {
@@ -160,7 +162,7 @@ func (job *Job) Stop() error {
 }
 
 // Status generates a JobStatus with information from the job and it's underlying os.Process & os.ProcessState
-func (job *Job) Status() (JobStatus, error) {
+func (job *Job) Status() JobStatus {
 	// Get PID and possible exit code from Process and ProcessState, assume running if ProcessState is nil
 	pid := 0
 	if job.cmd.Process != nil {
@@ -177,7 +179,7 @@ func (job *Job) Status() (JobStatus, error) {
 		PID:      pid,
 		Running:  running,
 		ExitCode: exitCode,
-	}, nil
+	}
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
