@@ -65,7 +65,7 @@ func (m *Middleware) Stream(srv any, ss grpc.ServerStream, info *grpc.StreamServ
 	if newCtx == nil {
 		return status.Errorf(codes.Unauthenticated, "no common name available in client cert")
 	}
-	// Check client has ownership for job
+	// todo check client has ownership for job, need to find out how to get job ID from req
 	// if j := m.db.Get(owner, "job id"); j == nil {
 	// 	return status.Errorf(codes.Unauthenticated, "invalid job UUID")
 	// }
