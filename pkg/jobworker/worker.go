@@ -124,8 +124,8 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
 	// Run the command as a given user as not to escalate privilege, since the executing user must also manage cgroups
-	if WORKER_UID != -1 && WORKER_GUID != -1 {
-		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GUID)}
+	if WORKER_UID != -1 && WORKER_GID != -1 {
+		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GID)}
 	}
 	j.cmd.SysProcAttr.Setpgid = true
 	// Start the job

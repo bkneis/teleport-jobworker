@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -11,8 +12,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Middleware implements the unary and stream interceptors on the gRPC server for authorization
 type Middleware struct {
 	db DB
+}
+
+// authz returns true if the jobId exists under the given owner
+func authz(db DB, owner, jobId string) bool {
+	return db.Get(owner, jobId) == nil
 }
 
 // addOwnerMetadata extracts the common name from the tls context and appends it to the grpc's context metadata
@@ -33,41 +40,66 @@ func (m *Middleware) addOwnerMetadata(ctx context.Context) (string, context.Cont
 	return "", nil
 }
 
+// GenericRequest wraps a generic interface around the protobuf requests so we can call GetId()
+type GenericRequest interface {
+	GetId() string
+}
+
 // Unary implements the Start, Stop and Status authz scheme using a grpc interceptor
 func (m *Middleware) Unary(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	_, newCtx := m.addOwnerMetadata(ctx)
+	owner, newCtx := m.addOwnerMetadata(ctx)
 	if newCtx == nil {
 		return nil, status.Errorf(codes.Unauthenticated, "no common name available in client cert")
 	}
 	// Allow any client to start a job, check ownership for status, logs and stop
-	// if info.FullMethod != "/JobWorker.Worker/Start" {
-	// 	if j := m.db.Get(owner, "job id"); j == nil {
-	// 		return nil, status.Errorf(codes.Unauthenticated, "invalid job UUID")
-	// 	}
-	// }
+	if info.FullMethod != "/JobWorker.Worker/Start" {
+		r, ok := req.(GenericRequest)
+		if !ok {
+			return nil, status.Errorf(codes.InvalidArgument, "could not parse request")
+		}
+		fmt.Printf("owner: %s, job UUID: %s\n", owner, r.GetId())
+		if authz(m.db, owner, r.GetId()) {
+			return nil, status.Errorf(codes.Unauthenticated, "invalid job UUID")
+		}
+	}
 	return handler(newCtx, req)
 }
 
-// wrappedStream wraps the grpc.ServerStream with a context to pass metadata to the stream handler
+// wrappedStream wraps the ServerStream with a context to pass metadata to the stream handler and a RecvMsg to authorize log requests
 type wrappedStream struct {
 	grpc.ServerStream
-	ctx context.Context
+	ctx   context.Context
+	db    DB
+	owner string
 }
 
 func (w *wrappedStream) Context() context.Context {
 	return w.ctx
 }
 
+// RecvMsg intercepts a stream request for authorization by checking the ownership of the job
+func (s *wrappedStream) RecvMsg(m interface{}) error {
+	// todo fix
+	// req, ok := m.(GenericRequest)
+	// if !ok {
+	// 	return status.Errorf(codes.InvalidArgument, "could not parse logs request")
+	// }
+	// fmt.Printf("owner: %s, job UUID: %s\n", s.owner, req.GetId())
+	// if authz(s.db, s.owner, req.GetId()) {
+	// 	return status.Errorf(codes.Unauthenticated, "invalid job UUID")
+	// }
+	// if err := s.ServerStream.RecvMsg(m); err != nil {
+	// 	return err
+	// }
+	return nil
+}
+
 // Stream implements the Logs authz scheme using a grpc interceptor
 func (m *Middleware) Stream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	ctx := ss.Context()
-	_, newCtx := m.addOwnerMetadata(ctx)
+	owner, newCtx := m.addOwnerMetadata(ctx)
 	if newCtx == nil {
 		return status.Errorf(codes.Unauthenticated, "no common name available in client cert")
 	}
-	// todo check client has ownership for job, need to find out how to get job ID from req
-	// if j := m.db.Get(owner, "job id"); j == nil {
-	// 	return status.Errorf(codes.Unauthenticated, "invalid job UUID")
-	// }
-	return handler(srv, &wrappedStream{ss, newCtx})
+	return handler(srv, &wrappedStream{ss, newCtx, m.db, owner})
 }
