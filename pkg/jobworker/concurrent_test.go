@@ -10,6 +10,8 @@ import (
 const NUM_CLIENTS = 10
 
 func TestConcurrentReaders(t *testing.T) {
+	WORKER_UID = -1
+	WORKER_GUID = -1
 	// Define number of log iterations and content
 	n := 5
 	echo := "hello"
