@@ -42,13 +42,13 @@ func newServer(db DB) *Server {
 	}
 }
 
-// NewServer returns a grpc.Server set up with mtls
+// NewServer returns a grpc.Server that implements WorkerServer set up with mtls and authz middleware
 func NewServer() *grpc.Server {
+	// Load TLS certs
 	cert, err := tls.LoadX509KeyPair(certs.Path("./server.pem"), certs.Path("./server-key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
-
 	ca := x509.NewCertPool()
 	caFilePath := certs.Path("./root.pem")
 	caBytes, err := os.ReadFile(caFilePath)
@@ -58,7 +58,7 @@ func NewServer() *grpc.Server {
 	if ok := ca.AppendCertsFromPEM(caBytes); !ok {
 		log.Fatalf("failed to parse %q", caFilePath)
 	}
-
+	// Initialise TLS config with min version 1.3 and mtls
 	tlsConfig := &tls.Config{
 		ClientAuth:         tls.RequireAndVerifyClientCert,
 		Certificates:       []tls.Certificate{cert},
@@ -66,10 +66,10 @@ func NewServer() *grpc.Server {
 		MinVersion:         tls.VersionTLS13,
 		InsecureSkipVerify: false,
 	}
-
+	// Initialise jobs database and pass a reference to grpc server and middleware
 	db := &JobsDB{jobs: map[string]jobList{}}
 	m := Middleware{db}
-
+	// Set up gRPC server
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)), grpc.UnaryInterceptor(m.Unary), grpc.StreamInterceptor(m.Stream))
 	pb.RegisterWorkerServer(s, newServer(db))
 	return s
@@ -91,10 +91,11 @@ func getOwner(ctx context.Context) (string, error) {
 	return owner[0], nil
 }
 
+// Start runs a command as a job
 func (s *Server) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResponse, error) {
 	owner, err := getOwner(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	// Define job's command and options
 	memLimit, err := jobworker.ParseCgroupByte(req.Opts.MemLimit)
@@ -107,40 +108,47 @@ func (s *Server) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResp
 	if err != nil {
 		fmt.Print("failed to start command")
 		fmt.Print(err)
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	s.db.Update(owner, job)
 	return &pb.StartResponse{Id: job.ID}, nil
 }
 
+// Stop kills a job's process and cleans up it's environment
 func (s *Server) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopResponse, error) {
 	owner, err := getOwner(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
+	// Get Job from DB
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
 		fmt.Printf("Job not found using id=%s\n", req.Id)
 		return nil, ErrNotFound
 	}
+	// Stop the job from executing
 	err = job.Stop()
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	// Remove job from DB
 	s.db.Remove(owner, job.ID)
 	return &pb.StopResponse{}, nil
 }
 
+// Status returns the status of a running job
 func (s *Server) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusResponse, error) {
 	owner, err := getOwner(ctx)
 	if err != nil {
-		return nil, err
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
+	// Get Job from DB
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
 		fmt.Printf("Job not found using id=%s\n", req.Id)
 		return nil, ErrNotFound
 	}
+	// Convert job status to pb.JobStatus
 	status := job.Status()
 	return &pb.StatusResponse{JobStatus: &pb.JobStatus{
 		Id:       job.ID,
@@ -150,26 +158,29 @@ func (s *Server) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusR
 	}}, nil
 }
 
+// Output pipes the STDOUT and STDERR of a job to a gRPC stream
 func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) error {
 	ctx := stream.Context()
 	owner, err := getOwner(ctx)
 	if err != nil {
-		return err
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
 		fmt.Printf("Job not found using id=%s\n", req.Id)
 		return ErrNotFound
 	}
+	// Get io.ReadCloser to job's output and pipe over gRPC stream
 	reader, err := job.Output()
 	if err != nil {
-		return err
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
+	defer reader.Close()
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		err = stream.Send(&pb.Data{Bytes: scanner.Bytes()})
 		if err != nil {
-			return err
+			return status.Error(codes.Internal, err.Error())
 		}
 	}
 	return nil
