@@ -23,7 +23,7 @@ func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight
 
 func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 	req := &pb.StopRequest{Id: args[2]}
-	_, err := client.Stop(context.Background(), req)
+	_, err := client.Stop(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -33,7 +33,7 @@ func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 
 func Status(ctx context.Context, client pb.WorkerClient, args []string) error {
 	req := &pb.StatusRequest{Id: args[2]}
-	resp, err := client.Status(context.Background(), req)
+	resp, err := client.Status(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func Status(ctx context.Context, client pb.WorkerClient, args []string) error {
 
 func Logs(ctx context.Context, client pb.WorkerClient, args []string) error {
 	req := &pb.OutputRequest{Id: args[2]}
-	stream, err := client.Output(context.Background(), req)
+	stream, err := client.Output(ctx, req)
 	if err != nil {
 		return err
 	}

@@ -37,10 +37,23 @@ func TestGRPCServer(t *testing.T) {
 
 	client := pb.NewWorkerClient(conn)
 
+	// todo pass and return by job ID
 	if err = Start(ctx, client, []string{"", "", "bash", "-c", "echo test"}, 100, 100, "100M"); err != nil {
-		t.Errorf("expected start job to return non nil: actual error %v", err)
+		t.Errorf("expected start job to return non nil error: actual error %v", err)
 	}
+
+	// if err = Status(ctx, client, []string{"", "", "job ID"}); err != nil {
+	// 	t.Errorf("expected status to return non nil error: actual error %v", err)
+	// }
+
+	// if err = Stop(ctx, client, []string{"", "", "job ID"}); err != nil {
+	// 	t.Errorf("expected status to return non nil error: actual error %v", err)
+	// }
 }
+
+// todo test concurrent log readers
+
+// todo test authz with owner check and using other cert to query job status
 
 func loadTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
 	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
