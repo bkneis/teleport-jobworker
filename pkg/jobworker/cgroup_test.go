@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-const TEST_NAME = "TEST"
+const testName = "TEST"
 
-var TEST_OPTS = JobOpts{100, 50, 100 * CgroupMB}
+var testOpts = JobOpts{100, 50, 100 * CgroupMB}
 
 // exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
@@ -23,7 +23,7 @@ func exists(path string) (bool, error) {
 }
 
 func TestCgroupController(t *testing.T) {
-	testDir := fmt.Sprintf("/tmp/%s", TEST_NAME)
+	testDir := fmt.Sprintf("/tmp/%s", testName)
 	err := os.RemoveAll(testDir)
 	if err != nil {
 		t.Errorf("failed to clean up test dir: %v", err)
@@ -31,7 +31,7 @@ func TestCgroupController(t *testing.T) {
 	}
 	cgroup := Cgroup{"/tmp/"}
 	// TEST CreateGroup
-	err = cgroup.CreateGroup(TEST_NAME)
+	err = cgroup.CreateGroup(testName)
 	if err != nil {
 		t.Errorf("could not create cgroup: %v", err)
 		return
@@ -43,7 +43,7 @@ func TestCgroupController(t *testing.T) {
 	}
 
 	// TEST AddResourceControl
-	err = cgroup.AddResourceControl(TEST_NAME, TEST_OPTS)
+	err = cgroup.AddResourceControl(testName, testOpts)
 	if err != nil {
 		t.Errorf("could not add resource controls to cgroup controller: %v", err)
 		return
@@ -81,7 +81,7 @@ func TestCgroupController(t *testing.T) {
 		return
 	}
 	// TEST DeleteGroup
-	err = cgroup.DeleteGroup(TEST_NAME)
+	err = cgroup.DeleteGroup(testName)
 	if err != nil {
 		t.Errorf("could not delete cgroup: %v", err)
 		return

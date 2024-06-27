@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-const NUM_CLIENTS = 10
+const numClients = 10
 
 func TestConcurrentReaders(t *testing.T) {
 	WORKER_UID = -1
@@ -28,7 +28,7 @@ func TestConcurrentReaders(t *testing.T) {
 	}
 
 	// Spawn multiple clients to read log output
-	for _ = range NUM_CLIENTS {
+	for _ = range numClients {
 		// Get io.ReadCloser tailing job logs
 		reader, err := job.Output()
 		if err != nil {
