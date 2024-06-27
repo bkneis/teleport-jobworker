@@ -150,3 +150,46 @@ func TestJobWorker_Check_Exit_Code_Is_Propagated(t *testing.T) {
 		t.Errorf("expected exit code to be 4 and was %d", status.ExitCode)
 	}
 }
+
+func TestParseCgroupByte(t *testing.T) {
+	// test B
+	b, err := ParseCgroupByte("100")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 100*CgroupByte(1) {
+		t.Errorf("expected mem limit to be 1024: actual value %d", b)
+		return
+	}
+	// test KB
+	b, err = ParseCgroupByte("100K")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 100*CgroupKB {
+		t.Errorf("expected mem limit to be 1024: actual value %d", b)
+		return
+	}
+	// test MB
+	b, err = ParseCgroupByte("10M")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 10*CgroupMB {
+		t.Errorf("expected mem limit to be 10M: actual value %d", b)
+		return
+	}
+	// test GB
+	b, err = ParseCgroupByte("10G")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 10*CgroupGB {
+		t.Errorf("expected mem limit to be 10M: actual value %d", b)
+		return
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/teleport-jobworker/certs"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -40,10 +41,14 @@ func TestGRPCServer(t *testing.T) {
 	if !status.Running {
 		t.Error("expected job to be running and it isn't")
 	}
-	// Stop the job and assert no errors
-	// todo check for process on host using PID from status
+	// Stop the job and assert no errors and process isn't running
 	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
 		t.Errorf("expected stop to return non nil error: actual error %v", err)
+	}
+	_, err = os.FindProcess(int(status.Pid))
+	if err != nil {
+		t.Errorf("expected process not to be running")
+		return
 	}
 }
 
@@ -108,7 +113,7 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 // todo test authz with owner check and using other cert to query job status
 
 func newClient(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient) {
-	tlsConfig, err := loadTLS("/home/arthur/go/src/github.com/teleport-jobworker/certs/client.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/client-key.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/root.pem")
+	tlsConfig, err := loadTLS(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
 	if err != nil {
 		panic(err)
 	}

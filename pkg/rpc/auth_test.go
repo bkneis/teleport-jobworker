@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/teleport-jobworker/certs"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -32,7 +33,7 @@ func TestMtlsRejectsLowTlsVersion(t *testing.T) {
 	go startServer(s)
 	defer s.GracefulStop()
 
-	tlsConfig, err := loadTLSLowVersion("/home/arthur/go/src/github.com/teleport-jobworker/certs/client.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/client-key.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/root.pem")
+	tlsConfig, err := loadTLSLowVersion(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
 	if err != nil {
 		panic(err)
 	}
@@ -59,7 +60,7 @@ func TestMtlsChecksClientCert(t *testing.T) {
 	go startServer(s)
 	defer s.GracefulStop()
 
-	tlsConfig, err := loadTLSWithoutClientCert("/home/arthur/go/src/github.com/teleport-jobworker/certs/root.pem")
+	tlsConfig, err := loadTLSWithoutClientCert(certs.Path("./root.pem"))
 	if err != nil {
 		panic(err)
 	}

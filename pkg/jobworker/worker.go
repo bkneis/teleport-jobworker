@@ -35,7 +35,6 @@ func parseCgroupValue(value, unit string) (CgroupByte, error) {
 }
 
 // ParseCgroupByte returns a CgroupByte value based on a string
-// TODO test
 func ParseCgroupByte(value string) (n CgroupByte, err error) {
 	if strings.Contains(value, "K") {
 		if n, err = parseCgroupValue(value, "K"); err != nil {
@@ -53,7 +52,12 @@ func ParseCgroupByte(value string) (n CgroupByte, err error) {
 		}
 		return n * CgroupGB, nil
 	}
-	return 50 * CgroupMB, nil
+	// If no unit specified parse the string as is
+	v, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
+	}
+	return CgroupByte(v), nil
 }
 
 const (
@@ -93,7 +97,7 @@ type JobOpts struct {
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
 type JobStatus struct {
 	ID       string
-	PID      int
+	PID      int64
 	Running  bool
 	ExitCode int
 }
@@ -229,7 +233,7 @@ func (job *Job) Status() JobStatus {
 	}
 	return JobStatus{
 		ID:       job.ID,
-		PID:      pid,
+		PID:      int64(pid),
 		Running:  running,
 		ExitCode: exitCode,
 	}
