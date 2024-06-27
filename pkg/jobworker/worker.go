@@ -89,7 +89,7 @@ type JobStatus struct {
 	ID       string
 	PID      int64
 	Running  bool
-	ExitCode int
+	ExitCode int32
 }
 
 func (status JobStatus) String() string {
@@ -228,7 +228,7 @@ func (job *Job) Status() JobStatus {
 		ID:       job.ID,
 		PID:      int64(pid),
 		Running:  running,
-		ExitCode: exitCode,
+		ExitCode: int32(exitCode),
 	}
 }
 
