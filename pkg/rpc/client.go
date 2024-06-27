@@ -7,7 +7,7 @@ import (
 	pb "github.com/teleport-jobworker/pkg/proto"
 )
 
-func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight, ioWeight int32, memLimit string) error {
+func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight, ioWeight int32, memLimit string) (string, error) {
 	req := &pb.StartRequest{
 		Command: args[2],
 		Args:    args[3:],
@@ -15,10 +15,13 @@ func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight
 	}
 	resp, err := client.Start(ctx, req)
 	if err != nil {
-		return err
+		return "", err
 	}
-	fmt.Printf("Start Job %s\n", resp.GetId())
-	return nil
+	fmt.Printf("Started Job %s\n", resp.GetId())
+	fmt.Printf("View the logs: ./client logs %s\n", resp.GetId())
+	fmt.Printf("Check the status: ./client status %s\n", resp.GetId())
+	fmt.Printf("Stop the job: ./client stop %s\n", resp.GetId())
+	return resp.GetId(), nil
 }
 
 func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
@@ -31,18 +34,13 @@ func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 	return nil
 }
 
-func Status(ctx context.Context, client pb.WorkerClient, args []string) error {
+func Status(ctx context.Context, client pb.WorkerClient, args []string) (*pb.JobStatus, error) {
 	req := &pb.StatusRequest{Id: args[2]}
 	resp, err := client.Status(ctx, req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Println("Job Status")
-	fmt.Println("ID: ", resp.JobStatus.Id)
-	fmt.Println("PID: ", resp.JobStatus.Pid)
-	fmt.Println("Running: ", resp.JobStatus.Running)
-	fmt.Println("Exit Code: ", resp.JobStatus.ExitCode)
-	return nil
+	return resp.JobStatus, nil
 }
 
 func Logs(ctx context.Context, client pb.WorkerClient, args []string) error {

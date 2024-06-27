@@ -12,18 +12,14 @@ import (
 	"github.com/teleport-jobworker/pkg/jobworker"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 // ErrNotFound is returned when a job was not found using the UUID
-type ErrNotFound struct {
-	id string
-}
-
-func (err ErrNotFound) Error() string {
-	return fmt.Sprintf("could not find job %s", err.id)
-}
+var ErrNotFound = status.Errorf(codes.Unauthenticated, "invalid job UUID")
 
 // DB defines how to persist jobs across rpc requests, including ownership for authz
 type DB interface {
@@ -101,7 +97,11 @@ func (s *Server) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResp
 		return nil, err
 	}
 	// Define job's command and options
-	opts := jobworker.NewOpts(req.Opts.CpuWeight, req.Opts.IoWeight, jobworker.ParseCgroupByte(req.Opts.MemLimit))
+	memLimit, err := jobworker.ParseCgroupByte(req.Opts.MemLimit)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "mem limit job option was not valid")
+	}
+	opts := jobworker.NewOpts(req.Opts.CpuWeight, req.Opts.IoWeight, memLimit)
 	// Run the job
 	job, err := jobworker.Start(opts, req.Command, req.Args...)
 	if err != nil {
@@ -120,7 +120,8 @@ func (s *Server) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopRespons
 	}
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
-		return nil, &ErrNotFound{req.Id}
+		fmt.Printf("Job not found using id=%s\n", req.Id)
+		return nil, ErrNotFound
 	}
 	err = job.Stop()
 	if err != nil {
@@ -137,7 +138,8 @@ func (s *Server) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusR
 	}
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
-		return nil, &ErrNotFound{req.Id}
+		fmt.Printf("Job not found using id=%s\n", req.Id)
+		return nil, ErrNotFound
 	}
 	status := job.Status()
 	return &pb.StatusResponse{JobStatus: &pb.JobStatus{
@@ -156,7 +158,8 @@ func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) er
 	}
 	job := s.db.Get(owner, req.Id)
 	if job == nil {
-		return &ErrNotFound{req.Id}
+		fmt.Printf("Job not found using id=%s\n", req.Id)
+		return ErrNotFound
 	}
 	reader, err := job.Output()
 	if err != nil {
