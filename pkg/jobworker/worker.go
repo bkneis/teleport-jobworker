@@ -114,6 +114,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
+	j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: WORKER_UID, Gid: WORKER_GUID}
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
