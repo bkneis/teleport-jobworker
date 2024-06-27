@@ -144,7 +144,7 @@ func (s *Server) Status(ctx context.Context, req *pb.StatusRequest) (*pb.StatusR
 	status := job.Status()
 	return &pb.StatusResponse{JobStatus: &pb.JobStatus{
 		Id:       job.ID,
-		Pid:      int64(status.PID), // todo fix unneeded casts
+		Pid:      status.PID,
 		Running:  status.Running,
 		ExitCode: int32(status.ExitCode),
 	}}, nil
