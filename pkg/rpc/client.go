@@ -7,6 +7,7 @@ import (
 	pb "github.com/teleport-jobworker/pkg/proto"
 )
 
+// Start sends a Start request to the gRPC server given a client and returns it's ID
 func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight, ioWeight int32, memLimit string) (string, error) {
 	req := &pb.StartRequest{
 		Command: args[2],
@@ -17,13 +18,10 @@ func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight
 	if err != nil {
 		return "", err
 	}
-	fmt.Printf("Started Job %s\n", resp.GetId())
-	fmt.Printf("View the logs: ./client logs %s\n", resp.GetId())
-	fmt.Printf("Check the status: ./client status %s\n", resp.GetId())
-	fmt.Printf("Stop the job: ./client stop %s\n", resp.GetId())
 	return resp.GetId(), nil
 }
 
+// Stop sends a Stop request to the gRPC server given a client and checks for errors
 func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 	req := &pb.StopRequest{Id: args[2]}
 	_, err := client.Stop(ctx, req)
@@ -34,6 +32,7 @@ func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 	return nil
 }
 
+// Status sends a Status request to the gRPC server given a client and returns a JobStatus
 func Status(ctx context.Context, client pb.WorkerClient, args []string) (*pb.JobStatus, error) {
 	req := &pb.StatusRequest{Id: args[2]}
 	resp, err := client.Status(ctx, req)
@@ -43,6 +42,7 @@ func Status(ctx context.Context, client pb.WorkerClient, args []string) (*pb.Job
 	return resp.JobStatus, nil
 }
 
+// Logs sends a Output request to the gRPC server and logs the output stream
 func Logs(ctx context.Context, client pb.WorkerClient, args []string) error {
 	req := &pb.OutputRequest{Id: args[2]}
 	stream, err := client.Output(ctx, req)

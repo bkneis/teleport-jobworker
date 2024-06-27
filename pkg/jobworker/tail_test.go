@@ -28,7 +28,7 @@ func Test_tailReader_follow(t *testing.T) {
 		// Open TEST file in append only
 		f, err := os.OpenFile(testFile, os.O_APPEND|os.O_WRONLY, 0644)
 		if err != nil {
-			panic(err)
+			t.Fatal(err)
 		}
 		defer f.Close()
 		// Append some logging output

@@ -17,7 +17,7 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-func TestGRPCServer(t *testing.T) {
+func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
 	// Run grpc server and shutdown after test
 	s := NewServer()
 	go startServer(s)
@@ -25,10 +25,12 @@ func TestGRPCServer(t *testing.T) {
 	// Create grpc client
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	conn, client := newClient(ctx)
+	conn, client, err := newClient(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer conn.Close()
 	// Start a job with a long running process
-	var err error
 	var jobId string
 	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
 		t.Errorf("expected start job to return non nil error: actual error %v", err)
@@ -61,10 +63,12 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 	// Create grpc client
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	conn, client := newClient(ctx)
+	conn, client, err := newClient(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer conn.Close()
 	// Start a job with a long running process
-	var err error
 	var jobId string
 	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 0.2; done"}, 100, 100, "100M"); err != nil {
 		t.Errorf("expected start job to return non nil error: actual error %v", err)
@@ -74,7 +78,10 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		go func(id string) {
 			// Get stream to log output
-			conn, c := newClient(ctx)
+			conn, c, err := newClient(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
 			defer conn.Close()
 			req := &pb.OutputRequest{Id: id}
 			stream, err := c.Output(ctx, req)
@@ -112,16 +119,16 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 
 // todo test authz with owner check and using other cert to query job status
 
-func newClient(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient) {
+func newClient(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient, error) {
 	tlsConfig, err := loadTLS(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
 	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
 	if err != nil {
-		panic(err)
+		return nil, nil, err
 	}
-	return conn, pb.NewWorkerClient(conn)
+	return conn, pb.NewWorkerClient(conn), nil
 }
 
 func loadTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {

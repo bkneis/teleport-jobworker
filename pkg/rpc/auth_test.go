@@ -35,7 +35,7 @@ func TestMtlsRejectsLowTlsVersion(t *testing.T) {
 
 	tlsConfig, err := loadTLSLowVersion(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -43,7 +43,7 @@ func TestMtlsRejectsLowTlsVersion(t *testing.T) {
 
 	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	defer conn.Close()
 
@@ -62,7 +62,7 @@ func TestMtlsChecksClientCert(t *testing.T) {
 
 	tlsConfig, err := loadTLSWithoutClientCert(certs.Path("./root.pem"))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -70,7 +70,7 @@ func TestMtlsChecksClientCert(t *testing.T) {
 
 	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	defer conn.Close()
 
