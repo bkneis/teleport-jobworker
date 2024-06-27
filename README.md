@@ -11,6 +11,19 @@ The library assumes a 64 bit linux system with cgroups v2, no assurances are pro
 
 ## How to
 
+Build the grpc client and server
+
+`make all`
+
+Start the server
+
+`sudo ./server &`
+
+Run commands on the client
+
+`./client start bash -c "while true; do echo hello 2; sleep 1; done"`
+`./client stop|status|logs ...`
+
 Build the example
 
 `make example`
