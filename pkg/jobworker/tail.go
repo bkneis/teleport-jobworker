@@ -32,9 +32,5 @@ func newTailReader(fileName string, pollInterval time.Duration) (tailReader, err
 	if err != nil {
 		return tailReader{}, err
 	}
-
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return tailReader{}, err
-	}
 	return tailReader{f, pollInterval}, nil
 }
