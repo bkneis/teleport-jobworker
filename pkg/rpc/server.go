@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/teleport-jobworker/certs"
 	"github.com/teleport-jobworker/pkg/jobworker"
 	pb "github.com/teleport-jobworker/pkg/proto"
 	"google.golang.org/grpc"
@@ -43,14 +44,13 @@ func newServer(db DB) *Server {
 
 // NewServer returns a grpc.Server set up with mtls
 func NewServer() *grpc.Server {
-	// todo fix file paths
-	cert, err := tls.LoadX509KeyPair("/home/arthur/go/src/github.com/teleport-jobworker/certs/server.pem", "/home/arthur/go/src/github.com/teleport-jobworker/certs/server-key.pem")
+	cert, err := tls.LoadX509KeyPair(certs.Path("./server.pem"), certs.Path("./server-key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
 
 	ca := x509.NewCertPool()
-	caFilePath := "/home/arthur/go/src/github.com/teleport-jobworker/certs/root.pem"
+	caFilePath := certs.Path("./root.pem")
 	caBytes, err := os.ReadFile(caFilePath)
 	if err != nil {
 		log.Fatalf("failed to read ca cert %q: %v", caFilePath, err)
