@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -19,10 +21,38 @@ func (b CgroupByte) String() string {
 	return fmt.Sprintf("%d", b)
 }
 
+func parseCgroupValue(value, unit string) (CgroupByte, error) {
+	parts := strings.Split(value, unit)
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("cgroup value not valid")
+	}
+	v, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
+	}
+	return CgroupByte(v), nil
+}
+
 // ParseCgroupByte returns a CgroupByte value based on a string
-// TODO implement
-func ParseCgroupByte(memLimit string) CgroupByte {
-	return 50 * CgroupMB
+// TODO test
+func ParseCgroupByte(value string) (n CgroupByte, err error) {
+	if strings.Contains(value, "K") {
+		if n, err = parseCgroupValue(value, "K"); err != nil {
+			return 0, err
+		}
+		return n * CgroupKB, nil
+	} else if strings.Contains(value, "M") {
+		if n, err = parseCgroupValue(value, "M"); err != nil {
+			return 0, err
+		}
+		return n * CgroupMB, nil
+	} else if strings.Contains(value, "G") {
+		if n, err = parseCgroupValue(value, "G"); err != nil {
+			return 0, err
+		}
+		return n * CgroupGB, nil
+	}
+	return 50 * CgroupMB, nil
 }
 
 const (

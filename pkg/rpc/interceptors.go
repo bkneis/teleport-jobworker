@@ -88,9 +88,9 @@ func (s *wrappedStream) RecvMsg(m interface{}) error {
 	// if authz(s.db, s.owner, req.GetId()) {
 	// 	return status.Errorf(codes.Unauthenticated, "invalid job UUID")
 	// }
-	// if err := s.ServerStream.RecvMsg(m); err != nil {
-	// 	return err
-	// }
+	if err := s.ServerStream.RecvMsg(m); err != nil {
+		return err
+	}
 	return nil
 }
 
