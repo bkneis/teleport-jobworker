@@ -37,7 +37,7 @@ type Job struct {
 // JobOpts wraps the options that can be passed to cgroups for the job
 // details at https://facebookmicrosites.github.io/cgroup2/docs/overview
 type JobOpts struct {
-	CpuWeight int32      // `cpu.weight`
+	CPUWeight int32      // `cpu.weight`
 	IOWeight  int32      // `io.weight`
 	MemLimit  CgroupByte // `mem.high`
 }
@@ -70,7 +70,7 @@ type ResourceController interface {
 // NewOpts returns a configured JobOpts based on arguments
 func NewOpts(weight, ioLatency int32, memLimit CgroupByte) JobOpts {
 	return JobOpts{
-		CpuWeight: weight,
+		CPUWeight: weight,
 		IOWeight:  ioLatency,
 		MemLimit:  memLimit,
 	}

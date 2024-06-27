@@ -47,7 +47,7 @@ func (cg *Cgroup) updateController(name string, file, val string) error {
 // AddResourceControl updates the resource control interface file for a given cgroup using JobOpts. The
 // three currently supported are CPU, memory and IO
 func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
-	if err = cg.updateController(name, "cpu.weight", fmt.Sprintf("%d", opts.CpuWeight)); err != nil {
+	if err = cg.updateController(name, "cpu.weight", fmt.Sprintf("%d", opts.CPUWeight)); err != nil {
 		return err
 	}
 	if err = cg.updateController(name, "memory.high", fmt.Sprintf("%d", opts.MemLimit)); err != nil {
