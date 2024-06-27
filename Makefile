@@ -53,3 +53,7 @@ race_test:
 .PHONY: coverage
 coverage:
 	$(VERBOSE) go tool cover -html=coverage.out
+
+# View the code coverage in a web browser
+.PHONY: all
+all: server client example
