@@ -21,9 +21,13 @@ func (con *mockController) CreateGroup(name string) error                      {
 func (con *mockController) DeleteGroup(name string) error                      { return nil }
 func (con *mockController) AddResourceControl(name string, opts JobOpts) error { return nil }
 
-func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
+func mockUserId() {
 	WORKER_UID = -1
-	WORKER_GUID = -1
+	WORKER_GID = -1
+}
+
+func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
+	mockUserId()
 	n := 5
 	echo := "hello"
 	cmd := "bash"
@@ -84,8 +88,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 }
 
 func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
+	mockUserId()
 	cmd := "bash"
 	args := []string{"-c", "echo hello world"}
 	opts := NewOpts(100, 100, 50)
@@ -111,8 +114,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 }
 
 func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
+	mockUserId()
 	cmd := "bash"
 	args := []string{"-c", "exit 4"}
 	opts := NewOpts(100, 100, 50)
