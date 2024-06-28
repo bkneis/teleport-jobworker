@@ -1,13 +1,13 @@
 package jobworker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -30,6 +30,8 @@ type Job struct {
 	sync.RWMutex
 	ID      string
 	running bool
+	done    chan bool
+	pgid    int
 	cmd     *exec.Cmd
 	con     ResourceController
 }
@@ -78,7 +80,7 @@ func NewOpts(weight, ioLatency int32, memLimit CgroupByte) JobOpts {
 
 // NewJob initialises a Job
 func NewJob(id string, cmd *exec.Cmd, con ResourceController) *Job {
-	return &Job{ID: id, running: true, cmd: cmd, con: con}
+	return &Job{ID: id, running: true, cmd: cmd, con: con, done: make(chan bool, 1)}
 }
 
 // Start calls start using the default ResourceController Cgroup
@@ -123,10 +125,17 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	if err != nil {
 		return nil, fmt.Errorf("failed to start job's exec.Cmd: %w", err)
 	}
+	// Assign the process group ID to the job so that we have a reference to signal child processes in Stop if the command quits
+	j.pgid, err = syscall.Getpgid(j.cmd.Process.Pid)
+	if err != nil {
+		fmt.Printf("error getting pgid: %v", err)
+		return nil, err
+	}
 	// Run go routine to handle the blocking call exec.Cmd.Wait() and update the running flag to indicate the job has complete
 	go func(runningJob *Job, logFile *os.File) {
 		runningJob.cmd.Wait()
 		runningJob.setRunning(false)
+		runningJob.done <- true
 		logFile.Close()
 	}(j, f)
 	return j, nil
@@ -140,24 +149,25 @@ func (job *Job) Stop() error {
 		os.Remove(logPath(job.ID))
 		job.con.DeleteGroup(job.ID)
 	}()
-	// Request the process to terminate
-	if err := job.cmd.Process.Signal(syscall.SIGTERM); err != nil {
-		return fmt.Errorf("failed to send SIGTERM to job: %w", err)
+	// note the minus sign
+	fmt.Printf("killing %d pgid", job.pgid)
+	if err := syscall.Kill(-job.pgid, syscall.SIGTERM); err != nil {
+		return err
 	}
-	// Poll the process with a signal 0 to check if it is running
-	running := true
-	killTime := time.Now().Add(STOP_GRACE_PERIOD)
-	for killTime.Unix() > time.Now().Unix() {
-		if err := job.cmd.Process.Signal(syscall.Signal(0)); err != nil {
-			running = false
-			break
-		}
-		time.Sleep(STOP_POLL_INTERVAL)
-	}
-	// After 60 second grace period, kill the process with SIGKILL if still running
-	if running {
-		if err := job.cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to send SIGKILL job: %w", err)
+	ctx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
+	defer cancel()
+
+	if job.isRunning() {
+		fmt.Println("Job still running, waiting for done or timeout")
+		select {
+		case <-job.done:
+			if err := syscall.Kill(-job.pgid, syscall.SIGKILL); err != nil {
+				return err
+			}
+		case <-ctx.Done():
+			if err := syscall.Kill(-job.pgid, syscall.SIGKILL); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
