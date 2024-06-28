@@ -57,7 +57,7 @@ func (m *Middleware) Unary(ctx context.Context, req interface{}, info *grpc.Unar
 		if !ok {
 			return nil, status.Errorf(codes.InvalidArgument, "could not parse request")
 		}
-		fmt.Printf("owner: %s, job UUID: %s\n", owner, r.GetId())
+		fmt.Printf("%s request from owner: %s, job UUID: %s\n", info.FullMethod, owner, r.GetId())
 		if authz(m.db, owner, r.GetId()) {
 			return nil, status.Errorf(codes.Unauthenticated, "invalid job UUID")
 		}
@@ -79,17 +79,16 @@ func (w *wrappedStream) Context() context.Context {
 
 // RecvMsg intercepts a stream request for authorization by checking the ownership of the job
 func (s *wrappedStream) RecvMsg(m interface{}) error {
-	// todo fix
-	// req, ok := m.(GenericRequest)
-	// if !ok {
-	// 	return status.Errorf(codes.InvalidArgument, "could not parse logs request")
-	// }
-	// fmt.Printf("owner: %s, job UUID: %s\n", s.owner, req.GetId())
-	// if authz(s.db, s.owner, req.GetId()) {
-	// 	return status.Errorf(codes.Unauthenticated, "invalid job UUID")
-	// }
 	if err := s.ServerStream.RecvMsg(m); err != nil {
 		return err
+	}
+	req, ok := m.(GenericRequest)
+	if !ok {
+		return status.Errorf(codes.InvalidArgument, "could not parse logs request")
+	}
+	fmt.Printf("/JobWorker.Worker/Logs stream request from owner: %s, job UUID: %s\n", s.owner, req.GetId())
+	if authz(s.db, s.owner, req.GetId()) {
+		return status.Errorf(codes.Unauthenticated, "invalid job UUID")
 	}
 	return nil
 }
