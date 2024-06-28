@@ -120,6 +120,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	if WORKER_UID != -1 && WORKER_GUID != -1 {
 		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GUID)}
 	}
+	j.cmd.SysProcAttr.Setpgid = true
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
