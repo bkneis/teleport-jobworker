@@ -149,21 +149,18 @@ func (job *Job) Stop() error {
 		os.Remove(logPath(job.ID))
 		job.con.DeleteGroup(job.ID)
 	}()
-	// note the minus sign
-	fmt.Printf("killing %d pgid", job.pgid)
+	// Send SIGTERM to process group
 	if err := syscall.Kill(-job.pgid, syscall.SIGTERM); err != nil {
 		return err
 	}
+	// Set up timeout
 	ctx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
 	defer cancel()
-
+	// If job is running potentially wait on either done channel or SIGKILL after timeout
 	if job.isRunning() {
-		fmt.Println("Job still running, waiting for done or timeout")
 		select {
 		case <-job.done:
-			if err := syscall.Kill(-job.pgid, syscall.SIGKILL); err != nil {
-				return err
-			}
+			break
 		case <-ctx.Done():
 			if err := syscall.Kill(-job.pgid, syscall.SIGKILL); err != nil {
 				return err

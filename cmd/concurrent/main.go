@@ -60,7 +60,7 @@ func main() {
 		return
 	}
 
-	for _ = range numClients {
+	for i := range numClients {
 		// Get io.ReadCloser tailing job logs
 		reader, err := job.Output()
 		if err != nil {
@@ -71,12 +71,13 @@ func main() {
 
 		// Print logs to STDOUT
 		fmt.Println("Job logs")
-		go func(r io.ReadCloser) {
+		go func(r io.ReadCloser, n int) {
 			scanner := bufio.NewScanner(r)
 			for scanner.Scan() {
-				_ = scanner.Text()
+				line := scanner.Text()
+				fmt.Printf("Reader %d: %s\n", n, line)
 			}
-		}(reader)
+		}(reader, i)
 	}
 
 	// Wait for Ctrl+C
