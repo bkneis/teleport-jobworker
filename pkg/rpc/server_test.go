@@ -4,17 +4,14 @@ package rpc
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/teleport-jobworker/certs"
 	pb "github.com/teleport-jobworker/pkg/proto"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
@@ -117,40 +114,60 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 	}
 }
 
-// todo test authz with owner check and using other cert to query job status
-
-func newClient(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient, error) {
-	tlsConfig, err := loadTLS(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
+// TestGrpcServerAuthz ensures a client (client2) using a different tls cert and common name cannot execute commands on a job
+// owned by another client (localhost)
+func TestGrpcServerAuthz(t *testing.T) {
+	// Run grpc server and shutdown after test
+	s := NewServer()
+	go startServer(s)
+	defer s.GracefulStop()
+	// Create grpc client
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, client, err := newClient(ctx)
 	if err != nil {
-		return nil, nil, err
+		t.Fatal(err)
 	}
-	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
+	defer conn.Close()
+	// Start a job with a long running process
+	var jobId string
+	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
+		t.Errorf("expected start job to return non nil error: actual error %v", err)
+	}
+
+	// Create grpc client2
+	ctx2, cancel2 := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel2()
+	conn2, client2, err := newClient2(ctx2)
 	if err != nil {
-		return nil, nil, err
+		t.Fatal(err)
 	}
-	return conn, pb.NewWorkerClient(conn), nil
-}
+	defer conn2.Close()
 
-func loadTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
-	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load client certification: %w", err)
-	}
-
-	ca, err := os.ReadFile(caFile)
-	if err != nil {
-		return nil, fmt.Errorf("faild to read CA certificate: %w", err)
-	}
-
-	capool := x509.NewCertPool()
-	if !capool.AppendCertsFromPEM(ca) {
-		return nil, fmt.Errorf("faild to append the CA certificate to CA pool")
+	// Stop the job using client 2 and assert unauth error
+	if err = Stop(ctx, client2, []string{"", "", jobId}); err != nil {
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Errorf("expected return error to be status")
+		}
+		if st.Code() != codes.Unauthenticated {
+			t.Errorf("expected return code to be unauthenticated, actual: %d", st.Code())
+		}
 	}
 
-	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{certificate},
-		RootCAs:      capool,
+	// Status the job and assert no errors and process isn't running
+	if _, err = Status(ctx, client2, []string{"", "", jobId}); err != nil {
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Errorf("expected return error to be status")
+		}
+		if st.Code() != codes.Unauthenticated {
+			t.Errorf("expected return code to be unauthenticated, actual: %d", st.Code())
+		}
 	}
 
-	return credentials.NewTLS(tlsConfig), nil
+	// Stop the job and assert no errors and process isn't running
+	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
+		t.Errorf("expected stop to not return an error %v", err)
+	}
 }

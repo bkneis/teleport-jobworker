@@ -127,3 +127,51 @@ func loadTLSWithoutClientCert(caFile string) (credentials.TransportCredentials, 
 
 	return credentials.NewTLS(tlsConfig), nil
 }
+
+func newClient(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient, error) {
+	tlsConfig, err := loadTLS(certs.Path("./client.pem"), certs.Path("./client-key.pem"), certs.Path("./root.pem"))
+	if err != nil {
+		return nil, nil, err
+	}
+	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
+	if err != nil {
+		return nil, nil, err
+	}
+	return conn, pb.NewWorkerClient(conn), nil
+}
+
+func newClient2(ctx context.Context) (*grpc.ClientConn, pb.WorkerClient, error) {
+	tlsConfig, err := loadTLS(certs.Path("./client2.pem"), certs.Path("./client2-key.pem"), certs.Path("./root.pem"))
+	if err != nil {
+		return nil, nil, err
+	}
+	conn, err := grpc.DialContext(ctx, "localhost:50051", grpc.WithTransportCredentials(tlsConfig))
+	if err != nil {
+		return nil, nil, err
+	}
+	return conn, pb.NewWorkerClient(conn), nil
+}
+
+func loadTLS(certFile, keyFile, caFile string) (credentials.TransportCredentials, error) {
+	certificate, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load client certification: %w", err)
+	}
+
+	ca, err := os.ReadFile(caFile)
+	if err != nil {
+		return nil, fmt.Errorf("faild to read CA certificate: %w", err)
+	}
+
+	capool := x509.NewCertPool()
+	if !capool.AppendCertsFromPEM(ca) {
+		return nil, fmt.Errorf("faild to append the CA certificate to CA pool")
+	}
+
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		RootCAs:      capool,
+	}
+
+	return credentials.NewTLS(tlsConfig), nil
+}
