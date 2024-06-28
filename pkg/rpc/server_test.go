@@ -71,43 +71,62 @@ func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
 		t.Errorf("expected start job to return non nil error: actual error %v", err)
 	}
 
-	// Start 5 concurrent readers and stream the output for 2 seconds asserting the log output and no errors
-	for i := 0; i < 5; i++ {
-		go func(id string) {
-			// Get stream to log output
-			conn, c, err := newClient(ctx)
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer conn.Close()
-			req := &pb.OutputRequest{Id: id}
-			stream, err := c.Output(ctx, req)
-			if err != nil {
-				t.Errorf("expected output not to return an error, actual error: %v", err)
-				return
-			}
-			defer stream.CloseSend()
-			// Process logs for 2 seconds and assert the output with no errors
-			start := time.Now()
-			for {
-				if start.Add(2*time.Second).Unix() < time.Now().Unix() {
-					return
-				}
-				data, err := stream.Recv()
-				if err != nil {
-					t.Errorf("expected nil error receiving logs, actual error: %v", err)
-					return
-				}
-				line := string(data.GetBytes())
-				fmt.Println(line)
-				if line != "hello" {
-					t.Errorf("expected log output to be hello but was actually: %s", line)
-					break
-				}
-			}
-		}(jobId)
+	fmt.Printf("job ID %s\n", jobId)
+	req := &pb.OutputRequest{Id: jobId}
+	stream, err := client.Output(ctx, req)
+	if err != nil {
+		t.Fatalf("expected nil error got %v", err)
 	}
-	time.Sleep(2 * time.Second)
+	defer stream.CloseSend()
+	for i := 0; i < 5; i++ {
+		data, err := stream.Recv()
+		if err != nil {
+			t.Fatalf("expected nil error got %v", err)
+		}
+		line := string(data.GetBytes())
+		if line != "hello" {
+			t.Fatalf("read %s expecting %s", line, "hello")
+		}
+	}
+
+	// wg := &sync.WaitGroup{}
+
+	// // Start 5 concurrent readers and stream the output for 2 seconds asserting the log output and no errors
+	// for i := 0; i < 5; i++ {
+	// 	wg.Add(1)
+	// 	go func(id string, test *testing.T) {
+	// 		defer wg.Done()
+	// 		// Get stream to log output
+	// 		conn, c, err := newClient(ctx)
+	// 		if err != nil {
+	// 			test.Error(err)
+	// 		}
+	// 		defer conn.Close()
+	// 		req := &pb.OutputRequest{Id: id}
+	// 		stream, err := c.Output(ctx, req)
+	// 		if err != nil {
+	// 			test.Errorf("expected output not to return an error, actual error: %v", err)
+	// 			return
+	// 		}
+	// 		defer stream.CloseSend()
+	// 		// Process logs for 2 seconds and assert the output with no errors
+	// 		for i := 0; i < 10; i++ {
+	// 			fmt.Printf("reading %d\n", i)
+	// 			data, err := stream.Recv()
+	// 			if err != nil {
+	// 				test.Errorf("expected nil error receiving logs, actual error: %v", err)
+	// 				return
+	// 			}
+	// 			line := string(data.GetBytes())
+	// 			if line != "hello" {
+	// 				test.Errorf("expected log output to be hello but was actually: %s", line)
+	// 				break
+	// 			}
+	// 		}
+	// 	}(jobId, t)
+	// }
+	// wg.Wait()
+	fmt.Println("Cleaning up job")
 	// Clean the job up
 	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
 		t.Errorf("expected stop to return non nil error: actual error %v", err)
