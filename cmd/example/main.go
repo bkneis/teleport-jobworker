@@ -71,5 +71,4 @@ func main() {
 
 	// Wait for Ctrl+C
 	wg.Wait()
-	os.Exit(1)
 }
