@@ -4,9 +4,13 @@ Below are the commands used to generate the self signed mTLS certs. `github.com/
 
 ```
 go install github.com/cloudflare/cfssl/cmd/...@latest
+
 cfssl selfsign -config cfssl.json --profile rootca "Dev Testing CA" csr.json | cfssljson -bare root
+
 cfssl genkey csr.json | cfssljson -bare server
 cfssl genkey csr.json | cfssljson -bare client
+cfssl genkey csr2.json | cfssljson -bare client
 cfssl sign -ca root.pem -ca-key root-key.pem -config cfssl.json -profile server server.csr | cfssljson -bare server
 cfssl sign -ca root.pem -ca-key root-key.pem -config cfssl.json -profile client client.csr | cfssljson -bare client
+cfssl sign -ca root.pem -ca-key root-key.pem -config cfssl.json -profile client client2.csr | cfssljson -bare client
 ```
