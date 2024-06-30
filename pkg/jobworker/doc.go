@@ -5,6 +5,9 @@ as well as specify resource controls for the process.
 The Start function initiates a job and runs the linux command as an exec.Cmd in addition to a go routine to call the blocking function
 waiting to process the exit code. By default jobworker will use cgroups v2 to manage resource control of jobs using values in JobOpts.
 
+JobOpts allows three resource controllers to be configured, CPU, memory and IO. CPU is controlled using a weight, as defined by cgroups
+cpu.weight interface file, memory is a soft limit specified as mem.high interface file and IO also using io.weight.
+
 Additionally other implementations of resource control can be used by implementing ResourceController and use with StartWithController.
 
 Start returns a jobworker.Job that allows the caller to Stop, Status and Stop the job.
