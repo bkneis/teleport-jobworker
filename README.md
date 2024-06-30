@@ -48,6 +48,10 @@ or with the race detector
 
 `make race_test`
 
+Additionally integration tests that test the mTLS, authz and management of the linux process can be run using a sudo user (since it actually runs the gRPC server)
+
+`make integration_test`
+
 Generate the protobuf go & grpc definitions after updating `pkg/proto/worker.proto`
 
 `make proto`
