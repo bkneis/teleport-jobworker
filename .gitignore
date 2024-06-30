@@ -29,4 +29,6 @@ example
 example_debug
 example_concurrent
 server
-client
+server_debug
+worker
+worker_debug

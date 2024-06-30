@@ -21,8 +21,8 @@ Start the server
 
 Run commands on the client
 
-`./client start bash -c "while true; do echo hello 2; sleep 1; done"`
-`./client stop|status|logs ...`
+`./worker start bash -c "while true; do echo hello 2; sleep 1; done"`
+`./worker stop|status|logs ...`
 
 Build the example
 
