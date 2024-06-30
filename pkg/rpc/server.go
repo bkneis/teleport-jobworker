@@ -131,8 +131,9 @@ func (s *Server) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopRespons
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	// TODO in production we would need to "clean" up these jobs by running some go routine to remove old terminated jobs
 	// Remove job from DB
-	s.db.Remove(owner, job.ID)
+	// s.db.Remove(owner, job.ID)
 	return &pb.StopResponse{}, nil
 }
 
