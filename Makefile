@@ -28,7 +28,11 @@ server_debug:
 # Build the go application natively
 .PHONY: client
 client:
-	$(VERBOSE) go build -v -o client ./cmd/client
+	$(VERBOSE) go build -v -o worker ./cmd/client
+
+.PHONY: client_debug
+client_debug:
+	$(VERBOSE) go build -v -o worker_debug ./cmd/client
 
 .PHONY: proto
 proto:
@@ -56,4 +60,4 @@ coverage:
 
 # View the code coverage in a web browser
 .PHONY: all
-all: server client example
+all: server client server_debug client_debug
