@@ -26,6 +26,7 @@ message StatusRequest {
 
 message OutputRequest {
     string id = 1;
+    bool follow = 2;
 }
 
 // Options for cgroup v2 controllers, see doc.go for example interfaces
