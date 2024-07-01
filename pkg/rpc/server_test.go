@@ -4,7 +4,6 @@ package rpc
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -48,88 +47,6 @@ func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
 	if err != nil {
 		t.Errorf("expected process not to be running")
 		return
-	}
-}
-
-// todo fix
-func _TestGRPCServerCanHandleConcurrentReaders(t *testing.T) {
-	// Run grpc server and shutdown after test
-	s := NewServer()
-	go startServer(s)
-	defer s.GracefulStop()
-	// Create grpc client
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	conn, client, err := newClient(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-	// Start a job with a long running process
-	var jobId string
-	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 0.2; done"}, 100, 100, "100M"); err != nil {
-		t.Errorf("expected start job to return non nil error: actual error %v", err)
-	}
-
-	fmt.Printf("job ID %s\n", jobId)
-	req := &pb.OutputRequest{Id: jobId}
-	stream, err := client.Output(ctx, req)
-	if err != nil {
-		t.Fatalf("expected nil error got %v", err)
-	}
-	defer stream.CloseSend()
-	for i := 0; i < 5; i++ {
-		data, err := stream.Recv()
-		if err != nil {
-			t.Fatalf("expected nil error got %v", err)
-		}
-		line := string(data.GetBytes())
-		if line != "hello" {
-			t.Fatalf("read %s expecting %s", line, "hello")
-		}
-	}
-
-	// wg := &sync.WaitGroup{}
-
-	// // Start 5 concurrent readers and stream the output for 2 seconds asserting the log output and no errors
-	// for i := 0; i < 5; i++ {
-	// 	wg.Add(1)
-	// 	go func(id string, test *testing.T) {
-	// 		defer wg.Done()
-	// 		// Get stream to log output
-	// 		conn, c, err := newClient(ctx)
-	// 		if err != nil {
-	// 			test.Error(err)
-	// 		}
-	// 		defer conn.Close()
-	// 		req := &pb.OutputRequest{Id: id}
-	// 		stream, err := c.Output(ctx, req)
-	// 		if err != nil {
-	// 			test.Errorf("expected output not to return an error, actual error: %v", err)
-	// 			return
-	// 		}
-	// 		defer stream.CloseSend()
-	// 		// Process logs for 2 seconds and assert the output with no errors
-	// 		for i := 0; i < 10; i++ {
-	// 			fmt.Printf("reading %d\n", i)
-	// 			data, err := stream.Recv()
-	// 			if err != nil {
-	// 				test.Errorf("expected nil error receiving logs, actual error: %v", err)
-	// 				return
-	// 			}
-	// 			line := string(data.GetBytes())
-	// 			if line != "hello" {
-	// 				test.Errorf("expected log output to be hello but was actually: %s", line)
-	// 				break
-	// 			}
-	// 		}
-	// 	}(jobId, t)
-	// }
-	// wg.Wait()
-	fmt.Println("Cleaning up job")
-	// Clean the job up
-	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
-		t.Errorf("expected stop to return non nil error: actual error %v", err)
 	}
 }
 
