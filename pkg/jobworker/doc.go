@@ -10,9 +10,10 @@ cpu.weight interface file, memory is a soft limit specified as mem.high interfac
 
 Additionally other implementations of resource control can be used by implementing ResourceController and use with StartWithController.
 
-Start returns a jobworker.Job that allows the caller to Stop, Status and Stop the job.
+Start returns a jobworker.Job that allows the caller to stop, get the status or tail it's logs.
 
-Example usage of executing a linux command and tailing it's output
+Example usage of executing a linux command and tailing it's output. Note when calling Output with follow=true, the caller needs
+to unblock the reading go routine by calling Close, in this example we call Close after catching Ctrl+C
 
 package main
 
@@ -58,7 +59,7 @@ func main() {
     }
 
     // Get io.ReadCloser to tail job's output
-    reader, err := job.Output()
+    reader, err := job.Output(true)
     if err != nil {
         log.Error("could not get reader for job's output")
         return
