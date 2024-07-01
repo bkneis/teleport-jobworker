@@ -45,7 +45,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	}
 
 	// Assert output
-	reader, err := job.Output()
+	reader, err := job.Output(false)
 	if err != nil {
 		t.Error("could not get reader for job's output")
 		return

@@ -193,8 +193,8 @@ func (job *Job) Status() JobStatus {
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file by polling for updates in Read()
-func (job *Job) Output() (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL)
+func (job *Job) Output(follow bool) (reader io.ReadCloser, err error) {
+	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, follow)
 }
 
 func (job *Job) setRunning(running bool) {

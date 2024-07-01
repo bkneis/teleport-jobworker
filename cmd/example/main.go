@@ -52,7 +52,7 @@ func main() {
 		return
 	}
 	// Get io.ReadCloser tailing job logs
-	reader, err := job.Output()
+	reader, err := job.Output(true)
 	if err != nil {
 		fmt.Print("could not get reader for job's output")
 		return

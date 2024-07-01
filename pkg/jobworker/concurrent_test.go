@@ -30,7 +30,7 @@ func TestConcurrentReaders(t *testing.T) {
 	// Spawn multiple clients to read log output
 	for _ = range numClients {
 		// Get io.ReadCloser tailing job logs
-		reader, err := job.Output()
+		reader, err := job.Output(false)
 		if err != nil {
 			t.Errorf("could not get reader for job's output: %v", err)
 			return

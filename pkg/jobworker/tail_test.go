@@ -20,7 +20,7 @@ func Test_tailReader(t *testing.T) {
 		t.Error(err)
 	}
 	// Create tail reader and read from checking contents
-	reader, err := newTailReader(testFile, 20*time.Millisecond)
+	reader, err := newTailReader(testFile, 20*time.Millisecond, true)
 	// Append some "testing n" to emulate a job logging to STDOUT
 	go func(r io.ReadCloser) {
 		// Close the tail reader once writing is done
