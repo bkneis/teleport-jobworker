@@ -173,11 +173,7 @@ func main() {
         return
     }
     // Get the status
-    status, err := job.Status()
-    if err != nil {
-        log.Error(err)
-        return
-    }
+    status := job.Status()
 
     if !status.Running {
         log.Error("job not running")
