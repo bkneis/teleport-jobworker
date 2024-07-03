@@ -34,7 +34,6 @@ func Stop(ctx context.Context, client pb.WorkerClient, id string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Stopped job %s\n", req.Id)
 	return nil
 }
 

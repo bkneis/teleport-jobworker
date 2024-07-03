@@ -7,63 +7,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 
 	"github.com/google/uuid"
-)
-
-// CgroupByte is used as a Byte to parse JobOpts.MemLimit cgroup value
-type CgroupByte int64
-
-func (b CgroupByte) String() string {
-	return fmt.Sprintf("%d", b)
-}
-
-func parseCgroupValue(value, unit string) (CgroupByte, error) {
-	parts := strings.Split(value, unit)
-	if len(parts) < 2 {
-		return 0, fmt.Errorf("cgroup value not valid")
-	}
-	v, err := strconv.ParseInt(parts[0], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
-	}
-	return CgroupByte(v), nil
-}
-
-// ParseCgroupByte returns a CgroupByte value based on a string
-func ParseCgroupByte(value string) (n CgroupByte, err error) {
-	if strings.Contains(value, "K") {
-		if n, err = parseCgroupValue(value, "K"); err != nil {
-			return 0, err
-		}
-		return n * CgroupKB, nil
-	} else if strings.Contains(value, "M") {
-		if n, err = parseCgroupValue(value, "M"); err != nil {
-			return 0, err
-		}
-		return n * CgroupMB, nil
-	} else if strings.Contains(value, "G") {
-		if n, err = parseCgroupValue(value, "G"); err != nil {
-			return 0, err
-		}
-		return n * CgroupGB, nil
-	}
-	// If no unit specified parse the string as is
-	v, err := strconv.ParseInt(value, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
-	}
-	return CgroupByte(v), nil
-}
-
-const (
-	CgroupKB CgroupByte = 1024
-	CgroupMB            = CgroupKB * 1024
-	CgroupGB            = CgroupMB * 1024
 )
 
 // OutputMode determines if a call to Output should follow the logs or not, similar to tail -f
@@ -78,9 +25,9 @@ const (
 type Job struct {
 	sync.RWMutex
 	ID      string
+	pgid    int
 	running bool
 	done    chan bool
-	pgid    int
 	cmd     *exec.Cmd
 	readers []io.ReadCloser
 	con     ResourceController
@@ -135,6 +82,7 @@ func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 func StartWithController(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	// Create the job
 	j = NewJob(uuid.New().String(), exec.Command(cmd, args...), con)
+
 	// Create the cgroup and configure the controllers
 	if err = j.con.CreateGroup(j.ID); err != nil {
 		return nil, fmt.Errorf("failed to create cgroup: %w", err)
@@ -148,6 +96,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		return nil, fmt.Errorf("failed to add PID to cgroup: %w", err)
 	}
 	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
+
 	// Don't inherit environment from parent
 	j.cmd.Env = []string{}
 	// Pipe STDOUT and STDERR to a log file
@@ -157,11 +106,13 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
+
 	// Run the command as a given user as not to escalate privilege, since the executing user must also manage cgroups
 	if WORKER_UID != -1 && WORKER_GID != -1 {
 		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GID)}
 	}
 	j.cmd.SysProcAttr.Setpgid = true
+
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
@@ -204,7 +155,7 @@ func (job *Job) Stop(ctx context.Context) error {
 	// Set up timeout
 	killCtx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
 	defer cancel()
-	// If job is running potentially wait on either done channel or SIGKILL after timeout
+	// If job is running potentially wait on either done channel, SIGKILL after timeout or caller's context timeout
 	if job.isRunning() {
 		select {
 		case <-job.done:
@@ -242,9 +193,9 @@ func (job *Job) Status() JobStatus {
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file
-// If follow=true, the Read will block and poll for updates to the file. It is then the responsibility
-// of the caller to ensure .Close is called to prevent the Read blocking indefinitely.
-// If follow=false, upon Read'ing the entire file an io.EOF will be returned
+// If mode=FollowLogs, the Read will block and poll for updates to the file. The Read will block until either
+// the job completes, or Close() is called
+// If mode=DontFollowLogs, upon Read'ing the entire file an io.EOF will be returned
 func (job *Job) Output(mode OutputMode) (reader io.ReadCloser, err error) {
 	reader, err = newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, mode)
 	if err != nil {

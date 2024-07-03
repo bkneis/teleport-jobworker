@@ -24,13 +24,14 @@ message StatusRequest {
     string id = 1;
 }
 
+message GenericRequest {
+    string id = 1;
+}
+
+// Request for log stream
 message OutputRequest {
     string id = 1;
     bool follow = 2;
-}
-
-message GenericRequest {
-    string id = 1;
 }
 
 // Options for cgroup v2 controllers, see doc.go for example interfaces

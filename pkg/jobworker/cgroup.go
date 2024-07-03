@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -42,7 +44,7 @@ func (cg *Cgroup) CreateGroup(name string) (err error) {
 }
 
 // DeleteGroup deletes a cgroup's directory signalling cgroup to delete the group
-// TODO in production before deleting a group we could check cgroup.events to ensure no processes are still running in thr cgroup
+// TODO in production before deleting a group we could check cgroup.events to ensure no processes are still running in their cgroup
 func (cg *Cgroup) DeleteGroup(name string) error {
 	return os.RemoveAll(cg.groupPath(name))
 }
@@ -69,3 +71,55 @@ func (cg *Cgroup) AddResourceControl(name string, opts JobOpts) (err error) {
 func (cg *Cgroup) groupPath(name string) string {
 	return filepath.Join(cg.rootPath, name)
 }
+
+// CgroupByte is used as a Byte to parse JobOpts.MemLimit cgroup value
+type CgroupByte int64
+
+func (b CgroupByte) String() string {
+	return fmt.Sprintf("%d", b)
+}
+
+// parseCgroupValue returns the value for a given unit to split by, returning an error if not found
+func parseCgroupValue(value, unit string) (CgroupByte, error) {
+	parts := strings.Split(value, unit)
+	if len(parts) < 2 {
+		return 0, fmt.Errorf("cgroup value not valid")
+	}
+	v, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
+	}
+	return CgroupByte(v), nil
+}
+
+// ParseCgroupByte returns a CgroupByte value based on a string
+func ParseCgroupByte(value string) (n CgroupByte, err error) {
+	if strings.Contains(value, "K") {
+		if n, err = parseCgroupValue(value, "K"); err != nil {
+			return 0, err
+		}
+		return n * CgroupKB, nil
+	} else if strings.Contains(value, "M") {
+		if n, err = parseCgroupValue(value, "M"); err != nil {
+			return 0, err
+		}
+		return n * CgroupMB, nil
+	} else if strings.Contains(value, "G") {
+		if n, err = parseCgroupValue(value, "G"); err != nil {
+			return 0, err
+		}
+		return n * CgroupGB, nil
+	}
+	// If no unit specified parse the string as is
+	v, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("could not convert cgroup value to int: %w", err)
+	}
+	return CgroupByte(v), nil
+}
+
+const (
+	CgroupKB CgroupByte = 1024
+	CgroupMB            = CgroupKB * 1024
+	CgroupGB            = CgroupMB * 1024
+)

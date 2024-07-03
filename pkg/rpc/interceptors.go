@@ -29,6 +29,7 @@ func (m *Middleware) addOwnerMetadata(ctx context.Context) (string, context.Cont
 			if len(mtls.State.PeerCertificates) < 1 {
 				return "", nil
 			}
+			// Append common name to metadata
 			cn := mtls.State.PeerCertificates[0].Subject.CommonName
 			md, ok := metadata.FromIncomingContext(ctx)
 			if ok {

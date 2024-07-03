@@ -76,6 +76,8 @@ func main() {
 	case "stop":
 		if err = rpc.Stop(ctx, client, args[1]); err != nil {
 			fmt.Printf("error stopping job: %v\n", err)
+		} else {
+			fmt.Printf("Stopped job %s\n", args[1])
 		}
 		break
 	case "status":

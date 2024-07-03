@@ -27,11 +27,9 @@ func mockUserId() {
 	WORKER_GID = -1
 }
 
-func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
+func TestJobWorker_Can_Start_A_Job_And_Read_Logs(t *testing.T) {
 	mockUserId()
-	n := 5
-	echo := "hello"
-	cmd := "bash"
+	// Define job with known output to assert later
 	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo ${run}: %s; sleep 0.01; done", n, echo)}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -41,15 +39,13 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 		t.Error("failed to start job: ", err)
 		return
 	}
-
 	// Check the status and it's running
 	status := job.Status()
 	if !status.Running {
 		t.Error("expected job to be running and it isn't : ", err)
 		return
 	}
-
-	// Read all the job logs and assert the output of each line
+	// Read all the job logs
 	reader, err := job.Output(DontFollowLogs)
 	if err != nil {
 		t.Error("could not get reader for job's output")
@@ -60,7 +56,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	for scanner.Scan() {
 		logs = append(logs, scanner.Text())
 	}
-
+	// Assert the contents of the logs
 	for i, log := range logs {
 		expected := fmt.Sprintf("%d: %s", i+1, echo)
 		if log != expected {
@@ -71,7 +67,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 
 func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
 	mockUserId()
-	cmd := "bash"
+	// Define infinite task
 	args := []string{"-c", "while true; do sleep 2; done"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -81,18 +77,15 @@ func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
 		t.Error("failed to start job: ", err)
 		return
 	}
-
 	// Check the status and it's running
 	status := job.Status()
 	if !status.Running {
 		t.Error("expected job to be running and it isn't : ", err)
 		return
 	}
-
+	// Stop the job
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-
-	// Stop the job
 	if err = job.Stop(ctx); err != nil {
 		t.Errorf("expected to be able to stop the job, error : %v", err)
 	}
@@ -100,7 +93,7 @@ func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
 
 func TestJobWorker_Check_Status_After_Job_Completes(t *testing.T) {
 	mockUserId()
-	cmd := "bash"
+	// Define job that completes quickly
 	args := []string{"-c", "echo hello world"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -126,7 +119,6 @@ func TestJobWorker_Check_Status_After_Job_Completes(t *testing.T) {
 
 func TestJobWorker_Check_Exit_Code_Is_Propagated(t *testing.T) {
 	mockUserId()
-	cmd := "bash"
 	args := []string{"-c", "exit 4"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 

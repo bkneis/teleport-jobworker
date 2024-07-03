@@ -9,7 +9,7 @@ import (
 // jobList is a map of Jobs key'd by their ID
 type jobList map[string]*jobworker.Job
 
-// JobsDB is an in memory database of job's firstly key'd by owner and then job ID
+// JobsDB is an in memory database of jobs firstly key'd by owner and then ID
 // TODO in production this would be persisted in an actual DB
 type JobsDB struct {
 	sync.RWMutex

@@ -13,7 +13,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
+// TODO in production these tests would be separated out and potentially use table tests to improve the range of tests
+// and better observability when running in a CI
+func TestGRPCServer_Can_Start_Get_Status_And_Stop_Jobs(t *testing.T) {
 	// Run grpc server and shutdown after test
 	s := NewServer()
 	go startServer(s)
@@ -52,7 +54,7 @@ func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
 
 // TestGrpcServerAuthz ensures a client (client2) using a different tls cert and common name cannot execute commands on a job
 // owned by another client (localhost)
-func TestGrpcServerAuthz(t *testing.T) {
+func TestGrpcServer_Authz(t *testing.T) {
 	// Run grpc server and shutdown after test
 	s := NewServer()
 	go startServer(s)

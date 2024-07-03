@@ -106,8 +106,7 @@ func (s *Server) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResp
 	// Run the job
 	job, err := jobworker.Start(opts, req.Command, req.Args...)
 	if err != nil {
-		fmt.Print("failed to start command")
-		fmt.Print(err)
+		fmt.Printf("failed to start command: %v\n", err)
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	s.db.Update(owner, job)
@@ -171,16 +170,19 @@ func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) er
 		fmt.Printf("Job not found using id=%s\n", req.Id)
 		return ErrNotFound
 	}
-	// Get io.ReadCloser to job's output and pipe over gRPC stream
+	// If mode=FollowLogs, then Scan will block until the job completes or the client terminates the conn
+	// Otherwise we just read all the logs and return
 	mode := jobworker.DontFollowLogs
 	if req.GetFollow() {
 		mode = jobworker.FollowLogs
 	}
+	// Get io.ReadCloser to job's output and pipe over gRPC stream
 	reader, err := job.Output(mode)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 	defer reader.Close()
+	// Read job logs and send to stream
 	scanner := bufio.NewScanner(reader)
 	for scanner.Scan() {
 		err = stream.Send(&pb.Data{Bytes: scanner.Bytes()})

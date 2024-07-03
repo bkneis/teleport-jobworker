@@ -10,15 +10,16 @@ import (
 	"time"
 )
 
-const numClients = 10
+const (
+	n          = 5
+	numClients = 10
+	echo       = "hello"
+	cmd        = "bash"
+)
 
 func TestConcurrentReaders(t *testing.T) {
 	mockUserId()
-	// Define number of log iterations and content
-	n := 5
-	echo := "hello"
 	// Define job's command and options for test
-	cmd := "bash"
 	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo ${run}: %s; sleep 0.01; done", n, echo)}
 	opts := JobOpts{100, 50, 100 * CgroupMB}
 	// Run the job
@@ -69,11 +70,7 @@ func TestConcurrentReaders(t *testing.T) {
 // TestConcurrentReadersNoFollow tests the same as above but not following the logs
 func TestConcurrentReadersNoFollow(t *testing.T) {
 	mockUserId()
-	// Define number of log iterations and content
-	n := 5
-	echo := "hello"
 	// Define job's command and options for test
-	cmd := "bash"
 	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo ${run}: %s; sleep 0.01; done", n, echo)}
 	opts := JobOpts{100, 50, 100 * CgroupMB}
 	// Run the job
@@ -88,7 +85,7 @@ func TestConcurrentReadersNoFollow(t *testing.T) {
 
 	// Spawn multiple clients to read log output
 	for _ = range numClients {
-		// Get io.ReadCloser tailing job logs
+		// Get io.ReadCloser with entire job logs
 		reader, err := job.Output(DontFollowLogs)
 		if err != nil {
 			t.Errorf("could not get reader for job's output: %v", err)
