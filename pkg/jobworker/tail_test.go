@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
 
-const testFile = "/tmp/tail_reader_test"
-
 func Test_tailReader_follow(t *testing.T) {
 	n := 5
+	testFile := filepath.Join(t.TempDir(), "reader_test")
 	// Create a test file with known contents
 	err := os.WriteFile(testFile, []byte(""), 0644)
 	if err != nil {
@@ -62,6 +62,7 @@ func Test_tailReader_follow(t *testing.T) {
 
 func Test_tailReader_no_follow(t *testing.T) {
 	n := 5
+	testFile := filepath.Join(t.TempDir(), "reader_test")
 	// Create a test file with known contents
 	err := os.WriteFile(testFile, []byte(""), 0644)
 	if err != nil {
