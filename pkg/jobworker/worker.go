@@ -42,6 +42,7 @@ type Job struct {
 	done    chan bool
 	pgid    int
 	cmd     *exec.Cmd
+	readers []io.ReadCloser
 	con     ResourceController
 }
 
@@ -80,7 +81,7 @@ type ResourceController interface {
 
 // NewJob initialises a Job
 func NewJob(id string, cmd *exec.Cmd, con ResourceController) *Job {
-	return &Job{ID: id, running: true, cmd: cmd, con: con, done: make(chan bool, 1)}
+	return &Job{ID: id, running: true, cmd: cmd, con: con, done: make(chan bool, 1), readers: []io.ReadCloser{}}
 }
 
 // Start calls start using the default ResourceController Cgroup
@@ -138,6 +139,10 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		runningJob.setRunning(false)
 		runningJob.done <- true
 		logFile.Close()
+		// Close all of the readers reading the logs
+		for _, r := range runningJob.readers {
+			r.Close()
+		}
 	}(j, f)
 	return j, nil
 }
@@ -199,7 +204,14 @@ func (job *Job) Status() JobStatus {
 // of the caller to ensure .Close is called to prevent the Read blocking indefinitely.
 // If follow=false, upon Read'ing the entire file an io.EOF will be returned
 func (job *Job) Output(mode OutputMode) (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, mode)
+	reader, err = newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, mode)
+	if err != nil {
+		return nil, err
+	}
+	job.Lock()
+	job.readers = append(job.readers, reader)
+	job.Unlock()
+	return reader, nil
 }
 
 func (job *Job) setRunning(running bool) {
