@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	port      = flag.Int("port", 50051, "the port to serve on")
-	cpuWeight = flag.Int("cpu", 100, "CPU weight as defined y cgroups v2 `cpu.weight` interface file")
-	memLimit  = flag.String("mem", "100M", "Memory limit as defined y cgroups v2 `mem.high` interface file")
-	ioWeight  = flag.Int("io", 50, "IO weight as defined y cgroups v2 `io.weight` interface file")
+	port       = flag.Int("port", 50051, "the port to serve on")
+	cpuWeight  = flag.Int("cpu", 100, "CPU weight as defined y cgroups v2 `cpu.weight` interface file")
+	memLimit   = flag.String("mem", "100M", "Memory limit as defined y cgroups v2 `mem.high` interface file")
+	ioWeight   = flag.Int("io", 50, "IO weight as defined y cgroups v2 `io.weight` interface file")
+	followLogs = flag.Bool("f", false, "Follows the job's logs, similiar to tail -f")
 )
 
 func help() {
@@ -38,6 +39,7 @@ func main() {
 		return
 	}
 	flag.Parse()
+	args := flag.Args()
 	// Set up gRPC client
 	tlsConfig, err := loadTLSConfig("certs/client.pem", "certs/client-key.pem", "certs/root.pem")
 	if err != nil {
@@ -56,9 +58,10 @@ func main() {
 	client := pb.NewWorkerClient(conn)
 
 	// Decide which action to execute
-	switch os.Args[1] {
+	switch args[0] {
 	case "start":
-		if id, err := rpc.Start(ctx, client, os.Args, int32(*cpuWeight), int32(*ioWeight), *memLimit); err != nil {
+		id, err := rpc.Start(ctx, client, args[1], args[2:], int32(*cpuWeight), int32(*ioWeight), *memLimit)
+		if err != nil {
 			fmt.Printf("error starting job: %v\n", err)
 		} else {
 			fmt.Printf("Started Job %s\n", id)
@@ -68,12 +71,12 @@ func main() {
 		}
 		break
 	case "stop":
-		if err = rpc.Stop(ctx, client, os.Args); err != nil {
+		if err = rpc.Stop(ctx, client, args[1]); err != nil {
 			fmt.Printf("error stopping job: %v\n", err)
 		}
 		break
 	case "status":
-		if status, err := rpc.Status(ctx, client, os.Args); err != nil {
+		if status, err := rpc.Status(ctx, client, args[1]); err != nil {
 			fmt.Printf("error getting status for job: %v\n", err)
 		} else {
 			fmt.Println("Job Status")
@@ -86,7 +89,7 @@ func main() {
 	case "logs":
 		streamCtx, streamCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer streamCancel()
-		if err = rpc.Logs(streamCtx, client, os.Args); err != nil && err != io.EOF {
+		if err = rpc.Logs(streamCtx, client, args[1], *followLogs); err != nil && err != io.EOF {
 			fmt.Printf("error getting job logs: %v\n", err)
 		}
 		break

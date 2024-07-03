@@ -8,10 +8,16 @@ import (
 )
 
 // Start sends a Start request to the gRPC server given a client and returns it's ID
-func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight, ioWeight int32, memLimit string) (string, error) {
+func Start(
+	ctx context.Context,
+	client pb.WorkerClient,
+	command string,
+	args []string,
+	cpuWeight, ioWeight int32,
+	memLimit string) (string, error) {
 	req := &pb.StartRequest{
-		Command: args[2],
-		Args:    args[3:],
+		Command: command,
+		Args:    args,
 		Opts:    &pb.JobOpts{CpuWeight: cpuWeight, MemLimit: memLimit, IoWeight: ioWeight},
 	}
 	resp, err := client.Start(ctx, req)
@@ -22,8 +28,8 @@ func Start(ctx context.Context, client pb.WorkerClient, args []string, cpuWeight
 }
 
 // Stop sends a Stop request to the gRPC server given a client and checks for errors
-func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
-	req := &pb.StopRequest{Id: args[2]}
+func Stop(ctx context.Context, client pb.WorkerClient, id string) error {
+	req := &pb.StopRequest{Id: id}
 	_, err := client.Stop(ctx, req)
 	if err != nil {
 		return err
@@ -33,8 +39,8 @@ func Stop(ctx context.Context, client pb.WorkerClient, args []string) error {
 }
 
 // Status sends a Status request to the gRPC server given a client and returns a JobStatus
-func Status(ctx context.Context, client pb.WorkerClient, args []string) (*pb.JobStatus, error) {
-	req := &pb.StatusRequest{Id: args[2]}
+func Status(ctx context.Context, client pb.WorkerClient, id string) (*pb.JobStatus, error) {
+	req := &pb.StatusRequest{Id: id}
 	resp, err := client.Status(ctx, req)
 	if err != nil {
 		return nil, err
@@ -43,8 +49,9 @@ func Status(ctx context.Context, client pb.WorkerClient, args []string) (*pb.Job
 }
 
 // Logs sends a Output request to the gRPC server and logs the output stream
-func Logs(ctx context.Context, client pb.WorkerClient, args []string) error {
-	req := &pb.OutputRequest{Id: args[2]}
+func Logs(ctx context.Context, client pb.WorkerClient, id string, follow bool) error {
+	req := &pb.OutputRequest{Id: id, Follow: follow}
+	fmt.Printf("following %t\n", follow)
 	stream, err := client.Output(ctx, req)
 	if err != nil {
 		return err
