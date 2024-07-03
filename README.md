@@ -59,6 +59,10 @@ The example catches SIGTERM so it's also possible to run it in the background
 
 Then use something like `pkill -f example` in order to send the SIGTERM to example and gracefully stop the Job and delete the cgroup.
 
+## Job Logs
+
+Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon recieving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
+
 ## Testing cgroups v2
 
 TODO In production and with more time automating some of these tests as a set of integration test would be ideal. Running in a sandbox server with known amounts of compute resources, a series of automated integration tests could run something similar to the example, where stress is executed then the CPU, memory and IO pressure interface file values are validated.
