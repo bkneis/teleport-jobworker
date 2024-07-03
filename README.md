@@ -20,9 +20,13 @@ Start the server with race detector enabled
 Run commands on the client
 
 `./worker start bash -c "while true; do echo hello; sleep 1; done"`
+
 `./worker stop ...`
+
 `./worker status ...`
+
 `./worker logs ...`
+
 `./worker -f logs ...`
 
 Query the go runtime profiles at

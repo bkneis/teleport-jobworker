@@ -141,7 +141,7 @@ Kill memory test
 
 Below is an example output highlighting the process hierarchy of a Job. Starting a job that spawns child processes, we use `ps` to ensure the correct PPID / PGID is set so that when we stop the Job all child processes are also terminated.
 
-```
+```bash
 ➜  teleport-jobworker git:(feature/v1) ✗ ./example_debug bash -c stress --cpu 4 &
 ➜  teleport-jobworker git:(feature/v1) ✗ ps aux | grep stress
 root     1724230  0.1  0.1 2138436 23248 pts/1   Sl+  08:50   0:00 ./example_debug bash -c stress --cpu 4
@@ -158,4 +158,26 @@ root     1724256 1724230  0 08:50 pts/1    S+     0:00 stress --cpu 4
 1723700
 ➜  teleport-jobworker git:(feature/v1) ✗ ps -o pgid= 1724264     
 1723700
+```
+
+Here is an example showing how stopping the job terminates any child proccesses
+
+```bash
+➜  teleport-jobworker git:(main) ./worker start bash -c "stress --cpu 1 &"         
+Started Job 31ba012e-6c59-47f4-90f8-eb302d211560
+View the logs: ./worker logs 31ba012e-6c59-47f4-90f8-eb302d211560
+Check the status: ./worker status 31ba012e-6c59-47f4-90f8-eb302d211560
+Stop the job: ./worker stop 31ba012e-6c59-47f4-90f8-eb302d211560
+➜  teleport-jobworker git:(main) ./worker logs 31ba012e-6c59-47f4-90f8-eb302d211560
+stress: info: [504011] dispatching hogs: 1 cpu, 0 io, 0 vm, 0 hdd
+➜  teleport-jobworker git:(main) ps aux | grep stress
+arthur    504011  0.0  0.0   3864   980 pts/0    S    16:58   0:00 stress --cpu 1
+arthur    504013 97.8  0.0   3864   100 pts/0    R    16:58   0:06 stress --cpu 1
+arthur    504130  0.0  0.0   8912   716 pts/1    S+   16:58   0:00 grep --color=auto --exclude-dir=.bzr --exclude-dir=CVS --exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn --exclude-dir=.idea --exclude-dir=.tox stress
+➜  teleport-jobworker git:(main) ./worker stop 31ba012e-6c59-47f4-90f8-eb302d211560
+Stopped job 31ba012e-6c59-47f4-90f8-eb302d211560
+➜  teleport-jobworker git:(main) ps aux | grep stress                              
+arthur    504286  0.0  0.0   8912   720 pts/1    S+   16:58   0:00 grep --color=auto --exclude-dir=.bzr --exclude-dir=CVS --exclude-dir=.git --exclude-dir=.hg --exclude-dir=.svn --exclude-dir=.idea --exclude-dir=.tox stress
+➜  teleport-jobworker git:(main) 
+
 ```
