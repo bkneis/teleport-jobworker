@@ -3,6 +3,7 @@ package jobworker
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -50,7 +51,7 @@ func TestCgroupController(t *testing.T) {
 	}
 	// assert /tmp/test/cgroup controller files are updated
 	// cpu
-	cpuWeight, err := os.ReadFile(fmt.Sprintf("%s/cpu.weight", testDir))
+	cpuWeight, err := os.ReadFile(filepath.Join(testDir, cpuWeightFile))
 	if err != nil {
 		t.Errorf("could not read CPU cgroup controller: %v", err)
 		return
@@ -60,7 +61,7 @@ func TestCgroupController(t *testing.T) {
 		return
 	}
 	// mem
-	mem, err := os.ReadFile(fmt.Sprintf("%s/memory.high", testDir))
+	mem, err := os.ReadFile(filepath.Join(testDir, memHighFile))
 	if err != nil {
 		t.Errorf("could not read memory cgroup controller: %v", err)
 		return
@@ -71,7 +72,7 @@ func TestCgroupController(t *testing.T) {
 		return
 	}
 	// io
-	ioLatency, err := os.ReadFile(fmt.Sprintf("%s/io.weight", testDir))
+	ioLatency, err := os.ReadFile(filepath.Join(testDir, ioWeightFile))
 	if err != nil {
 		t.Errorf("could not read IO cgroup controller: %v", err)
 		return

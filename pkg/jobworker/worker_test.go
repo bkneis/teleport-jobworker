@@ -2,6 +2,7 @@ package jobworker
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os/exec"
 	"syscall"
@@ -28,7 +29,10 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	echo := "hello"
 	cmd := "bash"
 	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo %s; sleep 0.1; done", n, echo)}
-	opts := NewOpts(100, 100, 50)
+	opts := JobOpts{100, 100, 50 * CgroupMB}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
 
 	// Run the job
 	job, err := StartWithController(&mockController{}, opts, cmd, args...)
@@ -45,7 +49,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 	}
 
 	// Assert output
-	reader, err := job.Output(false)
+	reader, err := job.Output(DontFollowLogs)
 	if err != nil {
 		t.Error("could not get reader for job's output")
 		return
@@ -58,13 +62,14 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 		}
 		i += 1
 		line := scanner.Text()
+		// todo improve
 		if line != "hello" {
 			t.Errorf("log output was not as expected, actual %s expected %s", line, echo)
 		}
 	}
 
 	// Stop the job
-	if err = job.Stop(); err != nil {
+	if err = job.Stop(ctx); err != nil {
 		t.Error("failed to stop job : ", err)
 		return
 	}
@@ -88,7 +93,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 	WORKER_GUID = -1
 	cmd := "bash"
 	args := []string{"-c", "echo hello world"}
-	opts := NewOpts(100, 100, 50)
+	opts := JobOpts{100, 100, 50 * CgroupMB}
 
 	// Run the job
 	job, err := StartWithController(&mockController{}, opts, cmd, args...)
@@ -115,7 +120,7 @@ func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
 	WORKER_GUID = -1
 	cmd := "bash"
 	args := []string{"-c", "exit 4"}
-	opts := NewOpts(100, 100, 50)
+	opts := JobOpts{100, 100, 50 * CgroupMB}
 
 	// Run the job
 	job, err := StartWithController(&mockController{}, opts, cmd, args...)

@@ -181,7 +181,7 @@ func main() {
     }
 
     // Get io.ReadCloser to tail job's output
-    reader, err := job.Output()
+    reader, err := job.Output(jobworker.FollowLogs)
     if err != nil {
         log.Error("could not get reader for job's output")
         return

@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 
@@ -23,6 +24,14 @@ const (
 	CgroupKB CgroupByte = 1024
 	CgroupMB            = CgroupKB * 1024
 	CgroupGB            = CgroupMB * 1024
+)
+
+// OutputMode determines if a call to Output should follow the logs or not, similar to tail -f
+type OutputMode int
+
+const (
+	DontFollowLogs OutputMode = 0
+	FollowLogs     OutputMode = 1
 )
 
 // Job maintains the exec.Cmd struct (containing the underlying os.Process) and the "owner" for authz
@@ -67,15 +76,6 @@ type ResourceController interface {
 	CreateGroup(string) error
 	DeleteGroup(string) error
 	AddResourceControl(string, JobOpts) error
-}
-
-// NewOpts returns a configured JobOpts based on arguments
-func NewOpts(weight, ioLatency int32, memLimit CgroupByte) JobOpts {
-	return JobOpts{
-		CPUWeight: weight,
-		IOWeight:  ioLatency,
-		MemLimit:  memLimit,
-	}
 }
 
 // NewJob initialises a Job
@@ -144,7 +144,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 
 // Stop request a job's termination using SIGTERM and deletes it's cgroup. If the SIGTERM is ignored, we send
 // a SIGKILL after STOP_GRACE_PERIOD.
-func (job *Job) Stop() error {
+func (job *Job) Stop(ctx context.Context) error {
 	// Regardless of signalling errors, ensure we clean up the job's log file and cgroup
 	defer func() {
 		os.Remove(logPath(job.ID))
@@ -155,17 +155,19 @@ func (job *Job) Stop() error {
 		return err
 	}
 	// Set up timeout
-	ctx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
+	killCtx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
 	defer cancel()
 	// If job is running potentially wait on either done channel or SIGKILL after timeout
 	if job.isRunning() {
 		select {
 		case <-job.done:
 			break
-		case <-ctx.Done():
+		case <-killCtx.Done():
 			if err := syscall.Kill(-job.pgid, syscall.SIGKILL); err != nil {
 				return err
 			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	return nil
@@ -196,8 +198,8 @@ func (job *Job) Status() JobStatus {
 // If follow=true, the Read will block and poll for updates to the file. It is then the responsibility
 // of the caller to ensure .Close is called to prevent the Read blocking indefinitely.
 // If follow=false, upon Read'ing the entire file an io.EOF will be returned
-func (job *Job) Output(follow bool) (reader io.ReadCloser, err error) {
-	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, follow)
+func (job *Job) Output(mode OutputMode) (reader io.ReadCloser, err error) {
+	return newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, mode)
 }
 
 func (job *Job) setRunning(running bool) {
@@ -215,5 +217,5 @@ func (job *Job) isRunning() bool {
 // logPath returns the file path for a job's log
 // TODO in production this would need to be in a folder with resource isolation using the job's PID
 func logPath(id string) string {
-	return fmt.Sprintf("/tmp/%s.log", id)
+	return filepath.Join("/tmp/", fmt.Sprintf("%s.log", id))
 }

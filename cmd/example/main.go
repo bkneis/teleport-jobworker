@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/teleport-jobworker/pkg/jobworker"
 )
@@ -20,7 +22,7 @@ func main() {
 		return
 	}
 	// Define job's command and options
-	opts := jobworker.NewOpts(100, 50, 100*jobworker.CgroupMB)
+	opts := jobworker.JobOpts{100, 50, 100 * jobworker.CgroupMB}
 	// Run the job
 	job, err := jobworker.Start(opts, os.Args[1], os.Args[2:]...)
 	if err != nil {
@@ -28,6 +30,8 @@ func main() {
 		fmt.Print(err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
 	// Capture Ctrl+C and stop job
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -36,7 +40,7 @@ func main() {
 	go func(j *jobworker.Job, w *sync.WaitGroup) {
 		<-c
 		defer wg.Done()
-		if err := job.Stop(); err != nil {
+		if err := job.Stop(ctx); err != nil {
 			fmt.Print(err)
 			return
 		}
@@ -52,7 +56,7 @@ func main() {
 		return
 	}
 	// Get io.ReadCloser tailing job logs
-	reader, err := job.Output(true)
+	reader, err := job.Output(jobworker.FollowLogs)
 	if err != nil {
 		fmt.Print("could not get reader for job's output")
 		return

@@ -11,7 +11,7 @@ import (
 type tailReader struct {
 	io.ReadCloser
 	pollInterval time.Duration
-	follow       bool
+	mode         OutputMode
 }
 
 // Read calls the normal io.ReadCloser and checks for an io.EOF error and skips returning, to sleep instead
@@ -22,7 +22,7 @@ func (t tailReader) Read(b []byte) (int, error) {
 			return n, nil
 		} else if err != io.EOF {
 			return n, err
-		} else if err == io.EOF && !t.follow {
+		} else if err == io.EOF && t.mode == DontFollowLogs {
 			return n, err
 		}
 		time.Sleep(t.pollInterval)
@@ -30,10 +30,10 @@ func (t tailReader) Read(b []byte) (int, error) {
 }
 
 // newTailReader opens a file by path, sets the read offset to the start and returns a wrapped tailReader to the file
-func newTailReader(fileName string, pollInterval time.Duration, follow bool) (tailReader, error) {
+func newTailReader(fileName string, pollInterval time.Duration, mode OutputMode) (tailReader, error) {
 	f, err := os.Open(fileName)
 	if err != nil {
 		return tailReader{}, err
 	}
-	return tailReader{f, pollInterval, follow}, nil
+	return tailReader{f, pollInterval, mode}, nil
 }

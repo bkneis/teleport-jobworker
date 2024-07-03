@@ -36,6 +36,9 @@ func main() {
         return
     }
 
+    ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+    defer cancel()
+
 	// Capture Ctrl+C and stop job
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -44,7 +47,7 @@ func main() {
 	go func(j *jobworker.Job, w *sync.WaitGroup) {
 		<-c
 		defer wg.Done()
-		if err := job.Stop(); err != nil {
+		if err := job.Stop(ctx); err != nil {
 			fmt.Print(err)
 			return
 		}
@@ -59,7 +62,7 @@ func main() {
     }
 
     // Get io.ReadCloser to tail job's output
-    reader, err := job.Output(true)
+    reader, err := job.Output(jobworker.FollowLogs)
     if err != nil {
         log.Error("could not get reader for job's output")
         return
