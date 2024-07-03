@@ -22,12 +22,14 @@ func (con *mockController) CreateGroup(name string) error                      {
 func (con *mockController) DeleteGroup(name string) error                      { return nil }
 func (con *mockController) AddResourceControl(name string, opts JobOpts) error { return nil }
 
-func TestJobWorker_Can_Start_A_Job_And_Tail_Logs(t *testing.T) {
+func mockUserId() {
 	WORKER_UID = -1
-	WORKER_GUID = -1
-	n := 5
-	echo := "hello"
-	cmd := "bash"
+	WORKER_GID = -1
+}
+
+func TestJobWorker_Can_Start_A_Job_And_Read_Logs(t *testing.T) {
+	mockUserId()
+	// Define job with known output to assert later
 	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo ${run}: %s; sleep 0.01; done", n, echo)}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -37,15 +39,13 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs(t *testing.T) {
 		t.Error("failed to start job: ", err)
 		return
 	}
-
 	// Check the status and it's running
 	status := job.Status()
 	if !status.Running {
 		t.Error("expected job to be running and it isn't : ", err)
 		return
 	}
-
-	// Read all the job logs and assert the output of each line
+	// Read all the job logs
 	reader, err := job.Output(DontFollowLogs)
 	if err != nil {
 		t.Error("could not get reader for job's output")
@@ -56,7 +56,7 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs(t *testing.T) {
 	for scanner.Scan() {
 		logs = append(logs, scanner.Text())
 	}
-
+	// Assert the contents of the logs
 	for i, log := range logs {
 		expected := fmt.Sprintf("%d: %s", i+1, echo)
 		if log != expected {
@@ -66,9 +66,8 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs(t *testing.T) {
 }
 
 func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
-	cmd := "bash"
+	mockUserId()
+	// Define infinite task
 	args := []string{"-c", "while true; do sleep 2; done"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -78,27 +77,23 @@ func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
 		t.Error("failed to start job: ", err)
 		return
 	}
-
 	// Check the status and it's running
 	status := job.Status()
 	if !status.Running {
 		t.Error("expected job to be running and it isn't : ", err)
 		return
 	}
-
+	// Stop the job
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-
-	// Stop the job
 	if err = job.Stop(ctx); err != nil {
 		t.Errorf("expected to be able to stop the job, error : %v", err)
 	}
 }
 
 func TestJobWorker_Check_Status_After_Job_Completes(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
-	cmd := "bash"
+	mockUserId()
+	// Define job that completes quickly
 	args := []string{"-c", "echo hello world"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -123,9 +118,7 @@ func TestJobWorker_Check_Status_After_Job_Completes(t *testing.T) {
 }
 
 func TestJobWorker_Check_Exit_Code_Is_Propagated(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
-	cmd := "bash"
+	mockUserId()
 	args := []string{"-c", "exit 4"}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
 
@@ -147,5 +140,48 @@ func TestJobWorker_Check_Exit_Code_Is_Propagated(t *testing.T) {
 	// Assert exit code 4 was set in status
 	if status.ExitCode != 4 {
 		t.Errorf("expected exit code to be 4 and was %d", status.ExitCode)
+	}
+}
+
+func TestParseCgroupByte(t *testing.T) {
+	// test B
+	b, err := ParseCgroupByte("100")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 100*CgroupByte(1) {
+		t.Errorf("expected mem limit to be 1024: actual value %d", b)
+		return
+	}
+	// test KB
+	b, err = ParseCgroupByte("100K")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 100*CgroupKB {
+		t.Errorf("expected mem limit to be 1024: actual value %d", b)
+		return
+	}
+	// test MB
+	b, err = ParseCgroupByte("10M")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 10*CgroupMB {
+		t.Errorf("expected mem limit to be 10M: actual value %d", b)
+		return
+	}
+	// test GB
+	b, err = ParseCgroupByte("10G")
+	if err != nil {
+		t.Errorf("expected no error but got: %v", err)
+		return
+	}
+	if b != 10*CgroupGB {
+		t.Errorf("expected mem limit to be 10M: actual value %d", b)
+		return
 	}
 }

@@ -28,3 +28,7 @@ cover.out
 example
 example_debug
 example_concurrent
+server
+server_debug
+worker
+worker_debug

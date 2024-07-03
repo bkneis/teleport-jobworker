@@ -8,8 +8,6 @@ import (
 
 const testName = "TEST"
 
-var testOpts = JobOpts{100, 50, 100 * CgroupMB}
-
 // exists returns whether the given file or directory exists
 func exists(path string) (bool, error) {
 	_, err := os.Stat(path)
@@ -23,9 +21,11 @@ func exists(path string) (bool, error) {
 }
 
 func TestCgroupController(t *testing.T) {
+	// Set up Cgroup to test with test tmp dir
 	tmpDir := t.TempDir()
 	testDir := filepath.Join(tmpDir, testName)
 	cgroup := Cgroup{tmpDir}
+	testOpts := JobOpts{100, 50, 100 * CgroupMB}
 	// TEST CreateGroup
 	err := cgroup.CreateGroup(testName)
 	if err != nil {

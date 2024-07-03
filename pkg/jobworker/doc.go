@@ -1,19 +1,23 @@
 /*
-Package jobworker implements executing arbitrary linux commands as "jobs" with functions to manage the job and it's underlying linux process
-as well as specify resource controls for the process.
+Package jobworker implements executing arbitrary linux commands as "jobs" with functions to manage the job and it's
+underlying linux process as well as specify resource controls for the process.
 
-The Start function initiates a job and runs the linux command as an exec.Cmd in addition to a go routine to call the blocking function
-waiting to process the exit code. By default jobworker will use cgroups v2 to manage resource control of jobs using values in JobOpts.
+The Start function initiates a job and runs the linux command using exec.Cmd in addition to starting a go routine to call
+the blocking function waiting to process the exit code. By default jobworker will use cgroups v2 to manage resource control
+of jobs using values in JobOpts.
 
-JobOpts allows three resource controllers to be configured, CPU, memory and IO. CPU is controlled using a weight, as defined by cgroups
-cpu.weight interface file, memory is a soft limit specified as mem.high interface file and IO also using io.weight.
+JobOpts allows three resource controllers to be configured, CPU, memory and IO. CPU is controlled using a weight, as defined
+by cgroups cpu.weight interface file, memory is a soft limit specified as mem.high interface file and IO also using io.weight.
 
 Additionally other implementations of resource control can be used by implementing ResourceController and use with StartWithController.
 
 Start returns a jobworker.Job that allows the caller to stop, get the status or tail it's logs.
 
-Example usage of executing a linux command and tailing it's output. Note when calling Output with follow=true, the caller needs
-to unblock the reading go routine by calling Close, in this example we call Close after catching Ctrl+C
+An alternative resource control mechanism can be used by implementing the ResourceController interface and passing it
+to StartWithController.
+
+Example usage of executing a linux command and tailing it's output. Note when calling Output with follow=true, the reader blocks
+until the job completes or the caller calls Close, in this example we call Close after catching Ctrl+C with a long running process.
 
 package main
 

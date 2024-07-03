@@ -13,19 +13,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// CgroupByte is used as a Byte to parse JobOpts.MemLimit cgroup value
-type CgroupByte int64
-
-func (b CgroupByte) String() string {
-	return fmt.Sprintf("%d", b)
-}
-
-const (
-	CgroupKB CgroupByte = 1024
-	CgroupMB            = CgroupKB * 1024
-	CgroupGB            = CgroupMB * 1024
-)
-
 // OutputMode determines if a call to Output should follow the logs or not, similar to tail -f
 type OutputMode int
 
@@ -38,9 +25,9 @@ const (
 type Job struct {
 	sync.RWMutex
 	ID      string
+	pgid    int
 	running bool
 	done    chan bool
-	pgid    int
 	cmd     *exec.Cmd
 	readers []io.ReadCloser
 	con     ResourceController
@@ -57,9 +44,9 @@ type JobOpts struct {
 // JobStatus is an amalgamation of the useful status information available from the exec.Cmd struct of the job and it's underlying os.Process
 type JobStatus struct {
 	ID       string
-	PID      int
+	PID      int64
 	Running  bool
-	ExitCode int
+	ExitCode int32
 }
 
 func (status JobStatus) String() string {
@@ -95,6 +82,7 @@ func Start(opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 func StartWithController(con ResourceController, opts JobOpts, cmd string, args ...string) (j *Job, err error) {
 	// Create the job
 	j = NewJob(uuid.New().String(), exec.Command(cmd, args...), con)
+
 	// Create the cgroup and configure the controllers
 	if err = j.con.CreateGroup(j.ID); err != nil {
 		return nil, fmt.Errorf("failed to create cgroup: %w", err)
@@ -108,6 +96,7 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		return nil, fmt.Errorf("failed to add PID to cgroup: %w", err)
 	}
 	defer syscall.Close(j.cmd.SysProcAttr.CgroupFD)
+
 	// Don't inherit environment from parent
 	j.cmd.Env = []string{}
 	// Pipe STDOUT and STDERR to a log file
@@ -117,11 +106,13 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 	}
 	j.cmd.Stdout = f
 	j.cmd.Stderr = f
+
 	// Run the command as a given user as not to escalate privilege, since the executing user must also manage cgroups
-	if WORKER_UID != -1 && WORKER_GUID != -1 {
-		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GUID)}
+	if WORKER_UID != -1 && WORKER_GID != -1 {
+		j.cmd.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(WORKER_UID), Gid: uint32(WORKER_GID)}
 	}
 	j.cmd.SysProcAttr.Setpgid = true
+
 	// Start the job
 	err = j.cmd.Start()
 	if err != nil {
@@ -140,9 +131,11 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		runningJob.done <- true
 		logFile.Close()
 		// Close all of the readers reading the logs
+		runningJob.Lock()
 		for _, r := range runningJob.readers {
 			r.Close()
 		}
+		runningJob.Unlock()
 	}(j, f)
 	return j, nil
 }
@@ -162,7 +155,7 @@ func (job *Job) Stop(ctx context.Context) error {
 	// Set up timeout
 	killCtx, cancel := context.WithTimeout(context.Background(), STOP_GRACE_PERIOD)
 	defer cancel()
-	// If job is running potentially wait on either done channel or SIGKILL after timeout
+	// If job is running potentially wait on either done channel, SIGKILL after timeout or caller's context timeout
 	if job.isRunning() {
 		select {
 		case <-job.done:
@@ -193,16 +186,16 @@ func (job *Job) Status() JobStatus {
 	}
 	return JobStatus{
 		ID:       job.ID,
-		PID:      pid,
+		PID:      int64(pid),
 		Running:  running,
-		ExitCode: exitCode,
+		ExitCode: int32(exitCode),
 	}
 }
 
 // Output returns a wrapped io.ReadCloser that "tails" the job's log file
-// If follow=true, the Read will block and poll for updates to the file. It is then the responsibility
-// of the caller to ensure .Close is called to prevent the Read blocking indefinitely.
-// If follow=false, upon Read'ing the entire file an io.EOF will be returned
+// If mode=FollowLogs, the Read will block and poll for updates to the file. The Read will block until either
+// the job completes, or Close() is called
+// If mode=DontFollowLogs, upon Read'ing the entire file an io.EOF will be returned
 func (job *Job) Output(mode OutputMode) (reader io.ReadCloser, err error) {
 	reader, err = newTailReader(logPath(job.ID), TAIL_POLL_INTERVAL, mode)
 	if err != nil {

@@ -10,7 +10,7 @@ option java_outer_classname = "JobWorkerProto";
 
 // Start request containing linux command as a string and resource control options
 message StartRequest {
-    string name = 1;
+    string command = 1;
     repeated string args = 2;
     JobOpts opts = 3;
 }
@@ -24,6 +24,11 @@ message StatusRequest {
     string id = 1;
 }
 
+message GenericRequest {
+    string id = 1;
+}
+
+// Request for log stream
 message OutputRequest {
     string id = 1;
     bool follow = 2;
@@ -33,14 +38,13 @@ message OutputRequest {
 message JobOpts {
     int32 cpu_weight = 1;
     string mem_limit = 2;
-    int32 io_latency = 3;
+    int32 io_weight = 3;
 }
 
 // Overall status of job, as returned by StatusResponse. I did not nest this message in StatusResponse since I think it could
 // be references by other messages in the future
 message JobStatus {
     string id = 1;
-    string owner = 2;
     int64 pid = 3;
     bool running = 4;
     int32 exitCode = 5;
