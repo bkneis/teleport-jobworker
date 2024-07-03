@@ -102,7 +102,7 @@ func (s *Server) Start(ctx context.Context, req *pb.StartRequest) (*pb.StartResp
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "mem limit job option was not valid")
 	}
-	opts := jobworker.NewOpts(req.Opts.CpuWeight, req.Opts.IoWeight, memLimit)
+	opts := jobworker.JobOpts{req.Opts.CpuWeight, req.Opts.IoWeight, memLimit}
 	// Run the job
 	job, err := jobworker.Start(opts, req.Command, req.Args...)
 	if err != nil {
@@ -127,7 +127,7 @@ func (s *Server) Stop(ctx context.Context, req *pb.StopRequest) (*pb.StopRespons
 		return nil, ErrNotFound
 	}
 	// Stop the job from executing
-	err = job.Stop()
+	err = job.Stop(ctx)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -172,7 +172,11 @@ func (s *Server) Output(req *pb.OutputRequest, stream pb.Worker_OutputServer) er
 		return ErrNotFound
 	}
 	// Get io.ReadCloser to job's output and pipe over gRPC stream
-	reader, err := job.Output()
+	mode := jobworker.DontFollowLogs
+	if req.GetFollow() {
+		mode = jobworker.FollowLogs
+	}
+	reader, err := job.Output(mode)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}

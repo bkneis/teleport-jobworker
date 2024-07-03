@@ -68,8 +68,7 @@ func TestConcurrentReaders(t *testing.T) {
 
 // TestConcurrentReadersNoFollow tests the same as above but not following the logs
 func TestConcurrentReadersNoFollow(t *testing.T) {
-	WORKER_UID = -1
-	WORKER_GUID = -1
+	mockUserId()
 	// Define number of log iterations and content
 	n := 5
 	echo := "hello"

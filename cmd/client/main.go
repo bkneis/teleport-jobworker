@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -85,7 +86,7 @@ func main() {
 	case "logs":
 		streamCtx, streamCancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer streamCancel()
-		if err = rpc.Logs(streamCtx, client, os.Args); err != nil {
+		if err = rpc.Logs(streamCtx, client, os.Args); err != nil && err != io.EOF {
 			fmt.Printf("error getting job logs: %v\n", err)
 		}
 		break
