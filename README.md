@@ -20,11 +20,14 @@ Start the server with race detector enabled
 Run commands on the client
 
 `./worker start bash -c "while true; do echo hello; sleep 1; done"`
-`./worker stop|status|logs ...`
+`./worker stop ...`
+`./worker status ...`
+`./worker logs ...`
+`./worker -f logs ...`
 
 Query the go runtime profiles at
 
-`host:6060/debug/pprof/`
+`http://localhost:6060/debug/pprof/`
 
 Run the libraries unit tests
 
@@ -48,11 +51,9 @@ or with the race detector and profiler enabled
 
 Run concurrent example and view profile information such as number of go routines, heap allocations etc. It simulates N clients tailing the logs of one job, where N is the first argument of the binary. There should be 1 go routine for each reader and 1 for the job.
 
-```
+```bash
 make concurrent
-
 ./concurrent 10 bash -c "while true; do echo hello; sleep 1; done"
-
 google-chrome http://localhost:6060/debug/pprof/
 ```
 
@@ -82,7 +83,9 @@ Then use something like `pkill -f example` in order to send the SIGTERM to examp
 
 ## Job Logs
 
-Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon recieving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
+Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon receiving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
+
+Note in production I would use a library to handle the CLI parsing, because of this the `follow` flag for the logs command has to be used like `worker -f logs` instead of `worker logs`.
 
 ## Testing
 
