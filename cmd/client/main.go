@@ -16,6 +16,8 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+// TODO in production I would use https://github.com/spf13/cobra to have some advance CLI options
+// such as being able to specify flags for specific commands, such as worker logs -f instead of worker -f logs
 var (
 	port       = flag.Int("port", 50051, "the port to serve on")
 	cpuWeight  = flag.Int("cpu", 100, "CPU weight as defined y cgroups v2 `cpu.weight` interface file")
