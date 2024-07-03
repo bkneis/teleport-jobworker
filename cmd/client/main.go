@@ -45,7 +45,7 @@ func main() {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	// tod use name resolution??
+	// TODO in production we would use an actual DNS to provide additional host verification in the TLS
 	conn, err := grpc.DialContext(ctx, fmt.Sprintf("localhost:%d", *port), grpc.WithTransportCredentials(tlsConfig))
 	if err != nil {
 		fmt.Printf("error loading tls config: %v", err)

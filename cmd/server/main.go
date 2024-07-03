@@ -17,6 +17,7 @@ func main() {
 	log.Printf("server starting on port %d...\n", *port)
 	// Setup and run gRPC server
 	s := rpc.NewServer()
+	// TODO in production we would use an actual DNS to provide additional host verification in the TLS
 	lis, err := net.Listen("tcp", fmt.Sprintf("localhost:%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
