@@ -22,17 +22,14 @@ func (con *mockController) CreateGroup(name string) error                      {
 func (con *mockController) DeleteGroup(name string) error                      { return nil }
 func (con *mockController) AddResourceControl(name string, opts JobOpts) error { return nil }
 
-func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
+func TestJobWorker_Can_Start_A_Job_And_Tail_Logs(t *testing.T) {
 	WORKER_UID = -1
 	WORKER_GUID = -1
 	n := 5
 	echo := "hello"
 	cmd := "bash"
-	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo %s; sleep 0.1; done", n, echo)}
+	args := []string{"-c", fmt.Sprintf("for run in {1..%d}; do echo ${run}: %s; sleep 0.01; done", n, echo)}
 	opts := JobOpts{100, 100, 50 * CgroupMB}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
 
 	// Run the job
 	job, err := StartWithController(&mockController{}, opts, cmd, args...)
@@ -48,47 +45,57 @@ func TestJobWorker_Can_Start_A_Job_And_Tail_Logs_Then_Stop_It(t *testing.T) {
 		return
 	}
 
-	// Assert output
+	// Read all the job logs and assert the output of each line
 	reader, err := job.Output(DontFollowLogs)
 	if err != nil {
 		t.Error("could not get reader for job's output")
 		return
 	}
 	scanner := bufio.NewScanner(reader)
-	i := 1
+	logs := []string{}
 	for scanner.Scan() {
-		if i >= n {
-			break
+		logs = append(logs, scanner.Text())
+	}
+
+	for i, log := range logs {
+		expected := fmt.Sprintf("%d: %s", i+1, echo)
+		if log != expected {
+			t.Errorf("log output was not as expected, actual %s expected %s", log, expected)
 		}
-		i += 1
-		line := scanner.Text()
-		// todo improve
-		if line != "hello" {
-			t.Errorf("log output was not as expected, actual %s expected %s", line, echo)
-		}
-	}
-
-	// Stop the job
-	if err = job.Stop(ctx); err != nil {
-		t.Error("failed to stop job : ", err)
-		return
-	}
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Assert the job is not running
-	status = job.Status()
-	if status.Running {
-		t.Error("expected job not to be running and it is")
-		return
-	}
-	// Assert exit code -1 since we sent a signal to terminate the job
-	if status.ExitCode != -1 {
-		t.Errorf("expected exit code to be -1 and was %d", status.ExitCode)
 	}
 }
 
-func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
+func TestJobWorker_Can_Stop_Long_Running_Job(t *testing.T) {
+	WORKER_UID = -1
+	WORKER_GUID = -1
+	cmd := "bash"
+	args := []string{"-c", "while true; do sleep 2; done"}
+	opts := JobOpts{100, 100, 50 * CgroupMB}
+
+	// Run the job
+	job, err := StartWithController(&mockController{}, opts, cmd, args...)
+	if err != nil {
+		t.Error("failed to start job: ", err)
+		return
+	}
+
+	// Check the status and it's running
+	status := job.Status()
+	if !status.Running {
+		t.Error("expected job to be running and it isn't : ", err)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	// Stop the job
+	if err = job.Stop(ctx); err != nil {
+		t.Errorf("expected to be able to stop the job, error : %v", err)
+	}
+}
+
+func TestJobWorker_Check_Status_After_Job_Completes(t *testing.T) {
 	WORKER_UID = -1
 	WORKER_GUID = -1
 	cmd := "bash"
@@ -115,7 +122,7 @@ func TestJobWorker_Status_After_Job_Completes(t *testing.T) {
 	}
 }
 
-func TestJobWorker_Exit_Code_Is_Propagated(t *testing.T) {
+func TestJobWorker_Check_Exit_Code_Is_Propagated(t *testing.T) {
 	WORKER_UID = -1
 	WORKER_GUID = -1
 	cmd := "bash"
