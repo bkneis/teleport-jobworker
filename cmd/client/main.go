@@ -42,6 +42,7 @@ func main() {
 	}
 	flag.Parse()
 	args := flag.Args()
+
 	// Set up gRPC client
 	tlsConfig, err := loadTLSConfig("certs/client.pem", "certs/client-key.pem", "certs/root.pem")
 	if err != nil {

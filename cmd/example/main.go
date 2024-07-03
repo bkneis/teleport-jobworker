@@ -30,8 +30,10 @@ func main() {
 		fmt.Print(err)
 		return
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
+
 	// Capture Ctrl+C and stop job
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
@@ -55,6 +57,7 @@ func main() {
 		fmt.Print("job not running")
 		return
 	}
+
 	// Get io.ReadCloser tailing job logs
 	reader, err := job.Output(jobworker.FollowLogs)
 	if err != nil {

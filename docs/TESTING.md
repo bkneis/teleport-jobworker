@@ -156,4 +156,6 @@ UID          PID    PPID  C STIME TTY      STAT   TIME CMD
 root     1724256 1724230  0 08:50 pts/1    S+     0:00 stress --cpu 4
 ➜  teleport-jobworker git:(feature/v1) ✗ ps -o pgid= 1724256     
 1723700
+➜  teleport-jobworker git:(feature/v1) ✗ ps -o pgid= 1724264     
+1723700
 ```

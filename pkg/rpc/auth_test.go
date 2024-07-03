@@ -48,7 +48,7 @@ func TestMtlsRejectsLowTlsVersion(t *testing.T) {
 	defer conn.Close()
 
 	client := pb.NewWorkerClient(conn)
-	if _, err = Status(ctx, client, os.Args); err != nil {
+	if _, err = Status(ctx, client, ""); err != nil {
 		if !strings.Contains(err.Error(), "tls: no supported versions satisfy MinVersion") && !strings.Contains(err.Error(), "connect: connection refused") {
 			t.Errorf("expected connection to be rejected for low tls version: actual error %v", err)
 		}
@@ -76,7 +76,7 @@ func TestMtlsChecksClientCert(t *testing.T) {
 
 	client := pb.NewWorkerClient(conn)
 
-	if _, err = Start(ctx, client, []string{"", "", "bash", "-c", "echo test"}, 100, 100, "100M"); err != nil {
+	if _, err = Start(ctx, client, "bash", []string{"-c", "echo test"}, 100, 100, "100M"); err != nil {
 		// Check error is either tls cert required or the connection was already torn down
 		if !strings.Contains(err.Error(), "tls: certificate required") && !strings.Contains(err.Error(), "write: broken pipe") {
 			t.Errorf("expected connection to be rejected for no client cert: actual error %v", err)

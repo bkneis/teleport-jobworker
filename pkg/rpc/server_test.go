@@ -28,19 +28,19 @@ func TestGRPCServerCanStartGetStatusAndStopJobs(t *testing.T) {
 	defer conn.Close()
 	// Start a job with a long running process
 	var jobId string
-	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
+	if jobId, err = Start(ctx, client, "bash", []string{"-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
 		t.Errorf("expected start job to return non nil error: actual error %v", err)
 	}
 	// Assert the status show it's running
 	var status *pb.JobStatus
-	if status, err = Status(ctx, client, []string{"", "", jobId}); err != nil {
+	if status, err = Status(ctx, client, jobId); err != nil {
 		t.Errorf("expected status to return non nil error: actual error %v", err)
 	}
 	if !status.Running {
 		t.Error("expected job to be running and it isn't")
 	}
 	// Stop the job and assert no errors and process isn't running
-	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
+	if err = Stop(ctx, client, jobId); err != nil {
 		t.Errorf("expected stop to return non nil error: actual error %v", err)
 	}
 	_, err = os.FindProcess(int(status.Pid))
@@ -67,7 +67,7 @@ func TestGrpcServerAuthz(t *testing.T) {
 	defer conn.Close()
 	// Start a job with a long running process
 	var jobId string
-	if jobId, err = Start(ctx, client, []string{"", "", "bash", "-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
+	if jobId, err = Start(ctx, client, "bash", []string{"-c", "while true; do echo hello; sleep 1; done"}, 100, 100, "100M"); err != nil {
 		t.Errorf("expected start job to return non nil error: actual error %v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestGrpcServerAuthz(t *testing.T) {
 	defer conn2.Close()
 
 	// Stop the job using client 2 and assert unauth error
-	if err = Stop(ctx, client2, []string{"", "", jobId}); err != nil {
+	if err = Stop(ctx, client2, jobId); err != nil {
 		st, ok := status.FromError(err)
 		if !ok {
 			t.Errorf("expected return error to be status")
@@ -92,7 +92,7 @@ func TestGrpcServerAuthz(t *testing.T) {
 	}
 
 	// Status the job and assert no errors and process isn't running
-	if _, err = Status(ctx, client2, []string{"", "", jobId}); err != nil {
+	if _, err = Status(ctx, client2, jobId); err != nil {
 		st, ok := status.FromError(err)
 		if !ok {
 			t.Errorf("expected return error to be status")
@@ -103,7 +103,7 @@ func TestGrpcServerAuthz(t *testing.T) {
 	}
 
 	// Stop the job and assert no errors and process isn't running
-	if err = Stop(ctx, client, []string{"", "", jobId}); err != nil {
+	if err = Stop(ctx, client, jobId); err != nil {
 		t.Errorf("expected stop to not return an error %v", err)
 	}
 }

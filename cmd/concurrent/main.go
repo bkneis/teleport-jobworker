@@ -58,7 +58,7 @@ func main() {
 		fmt.Print("job not running")
 		return
 	}
-
+	// Parse number of clients to simulate
 	numClients, err := strconv.Atoi(os.Args[1])
 	if err != nil {
 		fmt.Print("example provided invalid number")

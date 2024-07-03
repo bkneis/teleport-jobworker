@@ -81,12 +81,36 @@ The example catches SIGTERM so it's also possible to run it in the background
 
 Then use something like `pkill -f example` in order to send the SIGTERM to example and gracefully stop the Job and delete the cgroup.
 
-## Job Logs
+## Job Logs Streaming
 
 Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon receiving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
 
-Note in production I would use a library to handle the CLI parsing, because of this the `follow` flag for the logs command has to be used like `worker -f logs` instead of `worker logs`.
+TODO in production I would use a library to handle the CLI parsing, because of this the `follow` flag for the logs command has to be used like `worker -f logs` instead of `worker logs -f`.
+
+Also the implementation requires a FD per streamer of the logs, at scale the number of open FDs for the job worker user and per process limit would need to be increased. Past these limits the job worker running as a service would either need to be replicated, or an alternative in memory solution where buffers of the log file can be returned to the caller instead of opening a file, would need to be implemented.
 
 ## Testing
 
 Please see `docs/TESTING.md`
+
+TODO in production I would use table tests to expand the range of test scenarios where the job's command and it's output could be templated in a table test. If the tests were executed in a CI and the container running could be configured using different shells and executable could be used that have predictable logs.
+
+## Security
+
+Since this challenge was for L4 I have not isolated resources such as the file system or network using namespaces. Golang does support this through the SysCallProcAttrs.
+
+An example of malicious commands would be
+
+`./worker start bash -c "nc -kl 4444 | bash"`
+
+then in another terminal run
+
+`nc 127.0.0.1 4444` and execute some commands such as `echo command` and view them in the logs of the job. To prevent this isolating the network by PID using namespaces would need to be implemented.
+
+Also job logs are stored in `/tmp` under the filename `{job_uuid}.log` and have the file permissions for the user running the jobs (provided by `JOB_WORKER_UID` / `JOB_WORKER_GID` in `pkg/jobworker/config.go`).
+
+This means the jobs can see each other's logs and any other file, e.g.
+
+`./worker start cat /tmp/{another_job_uuid}.log`
+
+isolating the file system using namespaces would need to be done to prevent this.

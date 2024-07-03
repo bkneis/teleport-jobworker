@@ -180,9 +180,11 @@ func StartWithController(con ResourceController, opts JobOpts, cmd string, args 
 		runningJob.done <- true
 		logFile.Close()
 		// Close all of the readers reading the logs
+		runningJob.Lock()
 		for _, r := range runningJob.readers {
 			r.Close()
 		}
+		runningJob.Unlock()
 	}(j, f)
 	return j, nil
 }
