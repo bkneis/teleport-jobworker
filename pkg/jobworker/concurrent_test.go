@@ -47,13 +47,14 @@ func TestConcurrentReaders(t *testing.T) {
 		go func(r io.ReadCloser) {
 			scanner := bufio.NewScanner(r)
 			logs := []string{}
+			// Read logs
 			for scanner.Scan() {
 				logs = append(logs, scanner.Text())
 				if len(logs) >= n {
 					break
 				}
 			}
-			// todo fix assertion
+			// Assert contents
 			for i, log := range logs {
 				expected := fmt.Sprintf("%d: %s", i+1, echo)
 				if log != expected {
@@ -101,12 +102,13 @@ func TestConcurrentReadersNoFollow(t *testing.T) {
 		wg.Add(1)
 		go func(r io.ReadCloser, w *sync.WaitGroup) {
 			defer w.Done()
+			// Read logs
 			scanner := bufio.NewScanner(r)
 			logs := []string{}
 			for scanner.Scan() {
 				logs = append(logs, scanner.Text())
 			}
-			// todo fix assertion
+			// Assert contents
 			for i, log := range logs {
 				expected := fmt.Sprintf("%d: %s", i+1, echo)
 				if log != expected {
