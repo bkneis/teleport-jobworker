@@ -25,14 +25,9 @@ func exists(path string) (bool, error) {
 func TestCgroupController(t *testing.T) {
 	tmpDir := t.TempDir()
 	testDir := filepath.Join(tmpDir, testName)
-	err := os.RemoveAll(testDir)
-	if err != nil {
-		t.Errorf("failed to clean up test dir: %v", err)
-		return
-	}
 	cgroup := Cgroup{tmpDir}
 	// TEST CreateGroup
-	err = cgroup.CreateGroup(testName)
+	err := cgroup.CreateGroup(testName)
 	if err != nil {
 		t.Errorf("could not create cgroup: %v", err)
 		return
