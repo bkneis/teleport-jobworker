@@ -51,7 +51,6 @@ func Status(ctx context.Context, client pb.WorkerClient, id string) (*pb.JobStat
 // Logs sends a Output request to the gRPC server and logs the output stream
 func Logs(ctx context.Context, client pb.WorkerClient, id string, follow bool) error {
 	req := &pb.OutputRequest{Id: id, Follow: follow}
-	fmt.Printf("following %t\n", follow)
 	stream, err := client.Output(ctx, req)
 	if err != nil {
 		return err
