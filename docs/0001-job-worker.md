@@ -173,11 +173,7 @@ func main() {
         return
     }
     // Get the status
-    status, err := job.Status()
-    if err != nil {
-        log.Error(err)
-        return
-    }
+    status := job.Status()
 
     if !status.Running {
         log.Error("job not running")
@@ -185,7 +181,7 @@ func main() {
     }
 
     // Get io.ReadCloser to tail job's output
-    reader, err := job.Output()
+    reader, err := job.Output(jobworker.FollowLogs)
     if err != nil {
         log.Error("could not get reader for job's output")
         return
