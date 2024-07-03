@@ -1,9 +1,9 @@
 # JobWorker
 jobworker is a simple golang library that executes arbitrary linux processes with options for resource control using cgroups v2.
 
-The golang library uses the host file system to manage cgroups, where directory and files are created / delete in the cgroup root dir `/sys/fs/cgroup`.
+The golang library uses the host file system to manage cgroups, where directory and files are created / deleted in the cgroup root dir `/sys/fs/cgroup`.
 
-Executing the linux command is done with `exec.Cmd` where the Cmd is wrapped in a Job struct that provides an API for managing the process.
+Executing the linux command is done with `exec.Cmd`, where the Cmd is wrapped in a Job struct that provides an API for managing the process.
 
 The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups are correctly working. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created.
 
@@ -83,17 +83,17 @@ Then use something like `pkill -f example` in order to send the SIGTERM to examp
 
 ## Job Logs Streaming
 
-Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon receiving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
+Before starting a job it's STDOUT and STDERR are mapped to a file, this ensure the exec.Cmd concurrently writes both outputs to the file. When a client wants to read the logs, it calls `Output(mode)`, where `mode` is either `FollowLogs` or `DontFollowLogs`. If mode is `FollowLogs` then a reader is returned that upon receiving io.EOF, polls the file for changes, waiting for the `pollInterval`. If `DontFollowLogs` is used, then a normal reader is returned with the entirety of the log file. Once a job completes, all of the readers are closed causing any blocking calls to Read to return an error and complete.
 
 TODO in production I would use a library to handle the CLI parsing, because of this the `follow` flag for the logs command has to be used like `worker -f logs` instead of `worker logs -f`.
 
-Also the implementation requires a FD per streamer of the logs, at scale the number of open FDs for the job worker user and per process limit would need to be increased. Past these limits the job worker running as a service would either need to be replicated, or an alternative in memory solution where buffers of the log file can be returned to the caller instead of opening a file, would need to be implemented.
+The implementation requires a FD per streamer of the logs, at scale the number of open FDs for the job worker user and per process limit would need to be increased. Past these limits, the job worker running as a service would either need to be replicated, or an alternative in memory solution where buffers of the log file can be returned to the caller instead of opening a file, would need to be implemented.
 
 ## Testing
 
 Please see `docs/TESTING.md`
 
-TODO in production I would use table tests to expand the range of test scenarios where the job's command and it's output could be templated in a table test. If the tests were executed in a CI and the container running could be configured using different shells and executable could be used that have predictable logs.
+TODO in production I would use table tests to expand the range of test scenarios where the job's command and it's output could be asserted in a table test. If the tests were executed in a CI and the container running could be configured, using different shells and executables could be used to improve coverage and identify edge cases. Lastly the unit tests would be improved to separate the tests for better granularity and observability in the CI.
 
 ## Security
 
@@ -114,3 +114,5 @@ This means the jobs can see each other's logs and any other file, e.g.
 `./worker start cat /tmp/{another_job_uuid}.log`
 
 isolating the file system using namespaces would need to be done to prevent this.
+
+The job's command is executed as the linux user specified by `pkg/jobworker/config.go`, so we do not run it as a user with privileges to create / manage cgroups.
