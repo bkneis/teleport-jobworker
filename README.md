@@ -7,6 +7,8 @@ Executing the linux command is done with `exec.Cmd`, where the Cmd is wrapped in
 
 The library assumes a 64 bit linux system with cgroups v2, no assurances are provided that the cgroups are correctly working. For instance when creating a group, a directory is created in the cgroup root directory to trigger a group creation, but the library does not perform some sanity check to ensure the cgroup was actually created.
 
+This library could be of use if you need to run commands on a server and provide resource control, but not resource isolation, i.e. all jobs are owned by the same user. Example could be a dev server that runs long running tests and or dev environments
+
 ## How to
 
 Build the grpc client and server
@@ -101,7 +103,7 @@ TODO in production I would use table tests to expand the range of test scenarios
 
 ## Security
 
-Since this challenge was for L4 I have not isolated resources such as the file system or network using namespaces. Golang does support this through the SysCallProcAttrs.
+I have not isolated resources such as the file system or network using namespaces. Golang does support this through the SysCallProcAttrs.
 
 An example of malicious commands would be
 
